@@ -1,0 +1,41 @@
+{
+	"chat.tools.terminal.autoApprove": {
+		"/^bun start$/": {
+			"approve": true,
+			"matchCommandLine": true
+		},
+		"/^bun test$/": {
+			"approve": true,
+			"matchCommandLine": true
+		},
+		"/^bun run test$/": {
+			"approve": true,
+			"matchCommandLine": true
+		},
+		"/^bun typecheck$/": {
+			"approve": true,
+			"matchCommandLine": true
+		},
+		"/^bun run typecheck$/": {
+			"approve": true,
+			"matchCommandLine": true
+		},
+		"/^bunx tsc --noEmit$/": {
+			"approve": true,
+			"matchCommandLine": true
+		},
+		"/^bun format$/": {
+			"approve": true,
+			"matchCommandLine": true
+		},
+		"/^bun run format$/": {
+			"approve": true,
+			"matchCommandLine": true
+		},
+		"/^prettier --write \\.$/": {
+			"approve": true,
+			"matchCommandLine": true
+		}
+	},
+	"js/ts.tsdk.path": "node_modules/typescript/lib"
+}
