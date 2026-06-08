@@ -47,6 +47,7 @@ Preferred order: (1) native Bun APIs, (2) lightweight ESM libs (e.g., `undici`, 
 Reuse existing tools when available. Update relevant README when adding tools. Include `package.json` diff and install command for new deps.
 
 Use `bun typecheck` and `bun format` to check types and format before running tests with `bun test`.
+Run `bun typecheck` and `bun format` exactly as show here.
 
 ## Workflow & Documentation
 

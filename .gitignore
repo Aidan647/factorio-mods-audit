@@ -27,7 +27,7 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .cache
 *.tsbuildinfo
 cache
-
+!src/cache
 # IntelliJ based IDEs
 .idea
 
