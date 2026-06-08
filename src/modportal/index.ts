@@ -1,8 +1,8 @@
 import z from "zod"
 import { ModInfo, ModList, Release } from "./types"
-import { MemoryCache, DiskCache } from "../cache"
-import { createRateLimiter } from "../ratelimiter"
-import { scanBuffer } from "../scanfile"
+import { MemoryCache, DiskCache } from "../helpers/cache"
+import { createRateLimiter } from "../helpers/ratelimiter"
+import { scanBuffer } from "../helpers/scanfile"
 
 //  https://mods.factorio.com/{download_url}?username={username}&token={token}
 
@@ -61,7 +61,7 @@ export class ModPortal {
 	}
 	async getLatestMods({ count = 30, page = 1 } = {}): Promise<ModList> {
 		const response = await this.fetch(
-			`${this.config.baseUrl}api/mods?page=${page}&per_page=${count}&sort=updated_at&sort_order=desc`,
+			`${this.config.baseUrl}api/mods?page=${page}&page_size=${count}&sort=updated_at&sort_order=desc`,
 		)
 		const parsed = ModList.parse(await response.json())
 		return parsed

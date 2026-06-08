@@ -4,8 +4,8 @@
 
 ## Short-term
 
-- [ ] **Factorio API client** — fetch mod metadata + download zip from `mods.factorio.com/api/mods`
-- [ ] **Zip extraction** — unzip mod file in-memory or to temp dir
+- [x] **Factorio API client** — fetch mod metadata + download zip from `mods.factorio.com/api/mods`
+- [x] **Zip extraction** — unzip mod file in-memory or to temp dir
 - [ ] **Malware scan** — check for PE/ELF headers, high-entropy (packed) blobs
 - [ ] **PNG analysis** — compression ratio vs raw pixel data; flag unnecessary chunks (`tEXt`, `iTXt`, `zTXt`)
 - [ ] **Structure analysis** — detect `.git/`, `node_modules/`, `.DS_Store`, `.exe`, `.dll`, oversized files
@@ -22,7 +22,7 @@
 - [ ] **Dependency graph** — validate `dependencies` in `info.json` exist and are satisfiable
 - [ ] **Asset duplication** — find identical files across mod versions or within the same mod
 - [ ] **Unused assets** — flag images/sounds not referenced by any Lua prototype
-- [ ] **Info.json validation** — check required fields, semver, factorio_version compatibility
+- [x] **Info.json validation** — check required fields, semver, factorio_version compatibility
 - [ ] **License check** — detect license file, flag missing or restrictive licenses
 - [ ] **Changelog quality** — check that `changelog.txt` exists and has meaningful entries
 - [ ] **Migration scripts** — validate `migrations/` against current version
@@ -33,13 +33,13 @@
 - [ ] **Batch mode** — analyze all mods from a `mod-list.json` (single-player mod list)
 - [ ] **GitHub Action** — CI that runs audit on PRs that touch mod files
 - [ ] **Pre-commit hook** — run audit before committing mod changes
-- [ ] **Caching** — cache downloaded mods by hash to avoid re-download
+- [x] **Caching** — cache downloaded mods by hash to avoid re-download
 - [ ] **Parallel downloads** — fetch multiple mods concurrently in batch mode
 - [ ] **Progress bar** — visual progress during download/extract/analyze
 
 ## Advanced
 
-- [ ] **ClamAV integration** — call `clamscan` binary for real virus scanning
+- [x] **ClamAV integration** — call `clamscan` binary for real virus scanning
 - [ ] **Behavioral analysis** — run Lua code in a sandboxed VM (e.g., `lua-sandbox`) to detect dangerous calls
 - [ ] **Diff mode** — compare two versions of the same mod and report changes
 - [ ] **Web UI** — simple dashboard to browse audit results

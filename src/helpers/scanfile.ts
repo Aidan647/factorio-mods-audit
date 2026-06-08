@@ -1,5 +1,4 @@
-// @ts-ignore
-import { rm, writeFile } from "fs/promises"
+import { mkdir, rm, writeFile } from "fs/promises"
 
 export const Verdict = {
 	Clean: "Clean",
@@ -8,15 +7,8 @@ export const Verdict = {
 } as const
 type VerdictValue = (typeof Verdict)[keyof typeof Verdict]
 
-
-
-/**
- * Scan an in-memory Buffer.
- * In TCP/socket mode the buffer is streamed to clamd with no disk I/O.
- */
-
 export async function scanFile(path: string): Promise<VerdictValue> {
-	const scan = Bun.spawn(['clamdscan', '--no-summary', path])
+	const scan = Bun.spawn(["clamdscan", "--no-summary", "--fdpass", path])
 	await scan.exited
 	const output = await scan.stdout.text()
 	// /tmp/fma-scan-019ea4f0-9db0-7000-ab14-4dc9578f0da8: Eicar-Signature FOUND
@@ -31,10 +23,16 @@ export async function scanFile(path: string): Promise<VerdictValue> {
 		return Verdict.ScanError
 	}
 }
+await mkdir("/tmp/fma-scan", { recursive: true })
+process.on("beforeExit", () => {
+	rm("/tmp/fma-scan", { recursive: true, force: true }).catch((err) => {
+		console.log("Error cleaning up temp scan directory:", err)
+	})
+})
 
 export function scanBuffer(buffer: Buffer): Promise<VerdictValue> {
 	// write file to /tmp/ with random name, then scan it, then delete it
-	const tempPath = `/tmp/fma-scan-${Bun.randomUUIDv7()}`
+	const tempPath = `/tmp/fma-scan/${Bun.randomUUIDv7()}`
 	return writeFile(tempPath, buffer)
 		.then(() => scanFile(tempPath))
 		.finally(() => {

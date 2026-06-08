@@ -1,0 +1,25 @@
+{
+  // Map of finding type -> array of rules
+  rules: {
+    GitMetadata: [
+      { glob: ".git", description: "Git repository metadata" }
+    ],
+    EditorWorkspace: [
+      { glob: ".vscode", description: "VS Code workspace settings" }
+    ],
+    IDEWorkspace: [
+      { glob: ".idea", description: "IntelliJ workspace" },
+      { glob: ".intellij", description: "IntelliJ workspace (alt)" }
+    ],
+    DependencyInstall: [
+      { glob: "node_modules", description: "Installed node modules" }
+    ],
+    SystemMetadata: [
+      { glob: ".DS_Store", description: "macOS Finder metadata" }
+    ],
+    BinaryArtifact: [
+      { glob: "*.exe", description: "Windows executable" },
+      { glob: "*.dll", description: "Windows DLL" }
+    ]
+  }
+}
