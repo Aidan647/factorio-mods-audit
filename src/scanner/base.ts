@@ -1,4 +1,4 @@
-import type { Finding } from "../report"
+import type { Finding, ReportBuilder } from "../report"
 
 export type ScannerResult = {
 	/** Scanner identifier */
@@ -17,5 +17,5 @@ export abstract class Scanner {
 	abstract readonly id: string
 	abstract readonly weight: number
 
-	abstract scan(modPath: string): Promise<ScannerResult>
+	abstract scan(modPath: string, sorter: ReportBuilder): Promise<ScannerResult>
 }

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { ReportBuilder } from "../../src/report"
+import { calculateScore } from "../../src/report/score"
 import type { ModListItem } from "../../src/modportal/types"
 import type { ScannerResult } from "../../src/scanner/base"
 
@@ -35,18 +36,6 @@ function makeResult(overrides?: Partial<ScannerResult>): ScannerResult {
 	}
 }
 
-// Shifted geometric mean with shift=10 to match ReportBuilder.finalScore
-function expectedScore(results: { score: number; weight: number }[]): number {
-	const shift = 10
-	const totalWeight = results.reduce((s, r) => s + r.weight, 0)
-	if (totalWeight === 0) return 0
-	const product = results.reduce(
-		(prod, r) => prod * Math.pow((r.score + shift) / (100 + shift), r.weight / totalWeight),
-		1,
-	)
-	return Math.max(0, Math.min(100, Math.round((100 + shift) * product - shift)))
-}
-
 describe("ReportBuilder", () => {
 	test("finalScore returns 0 when no scanners", () => {
 		const builder = new ReportBuilder(makeMod())
@@ -59,17 +48,22 @@ describe("ReportBuilder", () => {
 		expect(builder.finalScore).toBe(100)
 	})
 
-	test("finalScore returns 0 for a single zero-score scanner", () => {
+	test("finalScore returns floor value for a single zero-score scanner", () => {
 		const builder = new ReportBuilder(makeMod())
 		builder.addScannerResult(makeResult({ score: 0, weight: 50 }))
-		expect(builder.finalScore).toBe(0)
+		// With minShift=0.1 a single scanner at 0 floors at 10
+		expect(builder.finalScore).toBe(1)
 	})
 
-	test("finalScore computes shifted geometric mean correctly", () => {
+	test("finalScore delegates to calculateScore", () => {
 		const builder = new ReportBuilder(makeMod())
+		const items = [
+			{ score: 100, weight: 30 },
+			{ score: 50, weight: 70 },
+		]
 		builder.addScannerResult(makeResult({ id: "a", score: 100, weight: 30 }))
 		builder.addScannerResult(makeResult({ id: "b", score: 50, weight: 70 }))
-		expect(builder.finalScore).toBe(expectedScore([{ score: 100, weight: 30 }, { score: 50, weight: 70 }]))
+		expect(builder.finalScore).toBe(calculateScore(items))
 	})
 
 	test("finalScore clamps to 0-100 range", () => {
@@ -80,23 +74,35 @@ describe("ReportBuilder", () => {
 
 	test("finalScore handles equal weights", () => {
 		const builder = new ReportBuilder(makeMod())
+		const items = [
+			{ score: 80, weight: 1 },
+			{ score: 60, weight: 1 },
+		]
 		builder.addScannerResult(makeResult({ id: "a", score: 80, weight: 1 }))
 		builder.addScannerResult(makeResult({ id: "b", score: 60, weight: 1 }))
-		expect(builder.finalScore).toBe(expectedScore([{ score: 80, weight: 1 }, { score: 60, weight: 1 }]))
+		expect(builder.finalScore).toBe(calculateScore(items))
 	})
 
 	test("finalScore: one zero one perfect with equal weights", () => {
 		const builder = new ReportBuilder(makeMod())
+		const items = [
+			{ score: 100, weight: 1 },
+			{ score: 0, weight: 1 },
+		]
 		builder.addScannerResult(makeResult({ id: "a", score: 100, weight: 1 }))
 		builder.addScannerResult(makeResult({ id: "b", score: 0, weight: 1 }))
-		expect(builder.finalScore).toBe(expectedScore([{ score: 100, weight: 1 }, { score: 0, weight: 1 }]))
+		expect(builder.finalScore).toBe(calculateScore(items))
 	})
 
 	test("finalScore: low-weight zero scanner doesn't kill score", () => {
 		const builder = new ReportBuilder(makeMod())
+		const items = [
+			{ score: 100, weight: 90 },
+			{ score: 0, weight: 10 },
+		]
 		builder.addScannerResult(makeResult({ id: "a", score: 100, weight: 90 }))
 		builder.addScannerResult(makeResult({ id: "b", score: 0, weight: 10 }))
-		expect(builder.finalScore).toBe(expectedScore([{ score: 100, weight: 90 }, { score: 0, weight: 10 }]))
+		expect(builder.finalScore).toBe(calculateScore(items))
 	})
 
 	test("totalSavings sums all scanner savings", () => {
@@ -142,7 +148,7 @@ describe("ReportBuilder", () => {
 		expect(report.modName).toBe("test-mod")
 		expect(report.version).toBe("1.0.0")
 		expect(report.sha1).toBe("abc123def456")
-		expect(report.score).toBe(expectedScore([{ score: 90, weight: 30 }, { score: 80, weight: 40 }]))
+		expect(report.score).toBe(calculateScore([{ score: 90, weight: 30 }, { score: 80, weight: 40 }]))
 		expect(report.modSize).toBe(10000)
 		expect(report.potentialSavings).toBe(500)
 		expect(report.percentageSavings).toBe(5)

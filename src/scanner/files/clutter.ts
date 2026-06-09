@@ -3,7 +3,7 @@ import { z } from "zod"
 import path from "node:path"
 import { readFile, readdir } from "node:fs/promises"
 import { Scanner, type ScannerResult } from "../base"
-import type { Finding } from "#/report"
+import type { Finding, ReportBuilder } from "#/report"
 import { getSize } from "#/helpers/getFolder"
 
 type ClutterRule = {
@@ -71,19 +71,31 @@ async function loadClutterRules(): Promise<CompiledClutterRule[]> {
  */
 export class ClutterScanner extends Scanner {
 	readonly id = "clutter"
-	readonly weight = 40
+	readonly weight = 80
 
 	/** Lazy-loaded compiled rules, loaded once on first scan. */
 	private rules: CompiledClutterRule[] | null = null
 
-	async scan(modPath: string): Promise<ScannerResult> {
+	async scan(modPath: string, sorter: ReportBuilder): Promise<ScannerResult> {
 		if (!this.rules) this.rules = await loadClutterRules()
 		const findings = await this.walkDirectory(modPath)
 		const grouped = this.groupFindings(findings)
 		const totalSavings = grouped.reduce((sum, f) => sum + (f.potentialSavings ?? 0), 0)
 
-		// Score: start at 100, deduct per finding type
-		const score = Math.max(0, 100 - grouped.length * 20)
+		const modSize = sorter.modSize || 1 // Avoid division by zero
+		// Score: % of mod size of potential savings waighted by severity (high=1.25, medium=1, low=0.75)
+		const savings = {
+			low: 0,
+			medium: 0,
+			high: 0,
+		}
+		for (const finding of grouped) {
+			const sev = finding.severity ?? "medium"
+			savings[sev] += finding.potentialSavings ?? 0
+		}
+		const weightedSavings = savings.low * 0.75 + savings.medium * 1 + savings.high * 1.25
+		const wasteRatio = Math.min(weightedSavings / modSize, 1)
+		const score = 100 * (1 - wasteRatio ** 0.25)
 		return { id: this.id, score, weight: this.weight, savings: totalSavings, findings: grouped }
 	}
 

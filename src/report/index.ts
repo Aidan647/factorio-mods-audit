@@ -1,6 +1,7 @@
 import type { ModListItem, Release } from "../modportal/types"
 import type { ScannerResult } from "../scanner/base"
 import { saveReportToDisk } from "./save"
+import { calculateScore } from "./score"
 
 export type Finding = {
 	type: string
@@ -82,15 +83,7 @@ export class ReportBuilder {
 	}
 
 	get finalScore(): number {
-		if (this.scannerResults.length === 0) return 0
-		const totalWeight = this.scannerResults.reduce((sum, r) => sum + r.weight, 0)
-		if (totalWeight === 0) return 0
-		const shift = 10
-		const product = this.scannerResults.reduce(
-			(prod, r) => prod * Math.pow((r.score + shift) / (100 + shift), r.weight / totalWeight),
-			1,
-		)
-		return Math.max(0, Math.min(100, Math.round((100 + shift) * product - shift)))
+		return calculateScore(this.scannerResults)
 	}
 
 	async saveReport(): Promise<AuditReport> {

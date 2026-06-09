@@ -13,14 +13,16 @@ import { ScanIndex } from "./scan-index"
 import { defaultConfig, type ScanConfig } from "../config"
 
 export class Orchestrator {
+	private readonly cleanipAwait: Promise<void | string>
 	constructor(
 		readonly portal: ModPortal,
 		private readonly cfg: ScanConfig = defaultConfig,
 	) {
 		// Ensure clean temp directory on construction
-		fs.rm(this.cfg.cacheDir, { recursive: true, force: true })
+		this.cleanipAwait = fs
+			.rm(this.cfg.cacheDir, { recursive: true, force: true })
 			.then(() => fs.mkdir(this.cfg.cacheDir, { recursive: true }))
-			.catch(() => {})
+			.catch(() => undefined)
 		this.index = new ScanIndex(this.cfg.indexPath)
 	}
 
@@ -68,6 +70,7 @@ export class Orchestrator {
 
 	/** Unzip a buffer into a temp directory, checking for path traversal. */
 	private async unzipToTemp(data: Buffer, tempPath: string, sorter: ReportBuilder): Promise<void> {
+		await this.cleanipAwait
 		await fs.mkdir(tempPath, { recursive: true })
 		const { entries } = await unzip(data)
 		for (const [entryPath, entry] of Object.entries(entries)) {
@@ -132,11 +135,14 @@ export class Orchestrator {
 	 */
 	private async runScanners(modPath: string, sorter: ReportBuilder): Promise<void> {
 		for (const scanner of this.scanners) {
-			const result = await scanner.scan(modPath).catch((err: Error) => {
+			const result = await scanner.scan(modPath, sorter).catch((err: Error) => {
 				sorter.addError(err)
 				return null
 			})
-			if (result) sorter.addScannerResult(result)
+			if (result) {
+				result.score = Math.max(0, Math.min(100, Math.round(10 * result.score) / 10))
+				sorter.addScannerResult(result)
+			}
 		}
 	}
 

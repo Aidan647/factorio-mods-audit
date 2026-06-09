@@ -2,7 +2,7 @@ import z from "zod"
 import path from "node:path"
 import { readdir, readFile } from "node:fs/promises"
 import { Scanner, type ScannerResult } from "./base"
-import type { Finding } from "../report"
+import type { Finding, ReportBuilder } from "../report"
 
 const versionFormat = z.stringFormat("versionFormat", (value) => {
 	const split = value.split(".")
@@ -132,9 +132,9 @@ async function isValidModFolder(
  */
 export class MetadataScanner extends Scanner {
 	readonly id = "metadata"
-	readonly weight = 30
+	readonly weight = 20
 
-	async scan(modPath: string): Promise<ScannerResult> {
+	async scan(modPath: string, sorter: ReportBuilder): Promise<ScannerResult> {
 		const findings: Finding[] = []
 		const infoJsonPath = path.join(modPath, "info.json")
 		const data = JSON.parse((await readFile(infoJsonPath, "utf-8").catch(() => "{}")) || "{}")

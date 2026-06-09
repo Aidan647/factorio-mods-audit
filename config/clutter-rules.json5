@@ -5,14 +5,14 @@
 			type: "backup",
 			description: "Temporary editor state files should never be shipped in ModPortal zips.",
 			category: "dev",
-			severity: "low",
+			severity: "medium",
 			globs: ["*~", "*.bak", "*.orig", "*.rej", "*.swp", "*.swo"],
 		},
 		{
 			type: "temp",
 			description: "Scratch files and temporary directories do not belong in published mods.",
 			category: "dev",
-			severity: "low",
+			severity: "medium",
 			globs: ["*.tmp", "*.temp", "tmp/**", "temp/**", ".tmp/**", ".temp/**"],
 		},
 		{
@@ -26,7 +26,7 @@
 			type: "compressed",
 			description: "Archives are often release leftovers or accidental nested packages.",
 			category: "build",
-			severity: "medium",
+			severity: "high",
 			globs: ["*.rar", "*.7z", "*.tar", "*.gz", "*.bz2", "*.xz", "*.tgz", "*.tbz2"],
 		},
 		{
@@ -40,21 +40,21 @@
 			type: "image",
 			description: "The mod should ship exported PNGs, not alternate raster formats.",
 			category: "assets",
-			severity: "medium",
+			severity: "high",
 			globs: ["*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.tiff"],
 		},
 		{
 			type: "video",
 			description: "Videos are not needed in published mod bundles.",
 			category: "assets",
-			severity: "low",
+			severity: "high",
 			globs: ["*.mp4", "*.avi", "*.mkv", "*.mov", "*.wmv"],
 		},
 		{
 			type: "audio",
 			description: "Source audio formats should stay out of release bundles unless exported to .ogg.",
 			category: "assets",
-			severity: "medium",
+			severity: "high",
 			globs: ["*.mp3", "*.wav", "*.flac", "*.aac"],
 		},
 
@@ -80,7 +80,7 @@
 			type: "nodeArtifacts",
 			description: "Tooling dependencies and build artifacts are not release assets.",
 			category: "dev",
-			severity: "high",
+			severity: "medium",
 			globs: [
 				"node_modules",
 				"dist",
@@ -104,7 +104,7 @@
 			type: "testReports",
 			description: "Test output and coverage are useful locally but should not ship.",
 			category: "dev",
-			severity: "medium",
+			severity: "low",
 			globs: [
 				"coverage",
 				"test-results",
@@ -122,7 +122,7 @@
 			type: "imageSources",
 			description: "Image project sources are not release assets; export PNGs instead.",
 			category: "assets",
-			severity: "medium",
+			severity: "high",
 			globs: ["*.xcf", "*.kra", "*.psd", "*.ora", "*.ai", "*.svg", "*.psb", "*.xcf.bak", "*.kra~", "*.ora~"],
 		},
 
@@ -131,7 +131,7 @@
 			type: "compiled",
 			description: "Generated binaries and caches should not be included in release archives.",
 			category: "build",
-			severity: "high",
+			severity: "medium",
 			globs: [
 				"__pycache__",
 				"*.pyc",
@@ -178,6 +178,7 @@
 		{
 			type: "dotFiles",
 			description: "Hidden dotfiles should be treated as clutter unless explicitly allowed.",
+			severity: "low",
 			globs: [".*"],
 		},
 	],
