@@ -27,7 +27,7 @@
 			description: "Archives are often release leftovers or accidental nested packages.",
 			category: "build",
 			severity: "medium",
-			globs: ["*.rar", "*.7z", "*.tar", "*.gz", "*.bz2", "*.xz", "*.tgz", "*.tbz2", "*.tar.gz", "*.tar.xz"],
+			globs: ["*.rar", "*.7z", "*.tar", "*.gz", "*.bz2", "*.xz", "*.tgz", "*.tbz2"],
 		},
 		{
 			type: "executable",

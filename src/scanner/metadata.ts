@@ -1,7 +1,8 @@
 import z from "zod"
 import path from "node:path"
-import type { AuditReportBuilder } from "../findingsSorter"
 import { readdir, readFile } from "node:fs/promises"
+import { Scanner, type ScannerResult } from "./base"
+import type { Finding } from "../report"
 
 const versionFormat = z.stringFormat("versionFormat", (value) => {
 	const split = value.split(".")
@@ -51,96 +52,114 @@ const infoJsonSchema = z.object({
 type InfoJson = z.infer<typeof infoJsonSchema>
 
 /**
- * Detect folder path modiname_version or modname,
- * scans the info.json for any malicious content, and returns the mod name and version.
+ * Find the mod folder inside the unpacked temp directory.
+ * Used by the preflight stage to locate the mod root for downstream scanners.
  */
-export async function analyzeInfoJson(sorter: AuditReportBuilder): Promise<string | null> {
-	const folderPath = await scanForFolder(sorter)
-	if (!folderPath) return null
-	const infoJsonPath = path.join(folderPath, "info.json")
-	await validateInfoJson(infoJsonPath, sorter)
-	return folderPath
-}
-
-async function validateInfoJson(infoJsonPath: string, sorter: AuditReportBuilder): Promise<boolean> {
-	const data = JSON.parse((await readFile(infoJsonPath, "utf-8").catch(() => "{}")) || "{}")
-	const result = infoJsonSchema.safeParse(data)
-	if (!result.success) {
-		sorter.addFinding({
-			type: "InvalidInfoJson",
-			description: z.prettifyError(result.error),
-		})
-		return false
-	}
-
-	for (const dep of result.data.dependencies) {
-		const regex = /^(?:(?:!|\?|\(\?\)|~) ?)?(?:[0-9a-zA-Z\-_ ]+)(?: (?:<=|>=|=|<|>) ?\d+(?:\.\d+(?:\.\d+)?)?)?$/
-		if (!regex.test(dep)) {
-			sorter.addFinding({
-				type: "InvalidDependency",
-				description: `The mod has an invalid dependency format: "${dep}".`,
-			})
-		}
-	}
-	return true
-}
-
-async function scanForFolder(sorter: AuditReportBuilder): Promise<string | null> {
-	const basePath = path.join("./cache/tmp", `${sorter.modName}-${sorter.version}/`)
-	const files = await readdir(basePath, { withFileTypes: true })
+export async function findModFolder(
+	basePath: string,
+	modName: string,
+	version: string,
+): Promise<{ folderPath: string; preflightFindings: Finding[] } | null> {
+	const files = await readdir(basePath, { withFileTypes: true }).catch(() => [])
 	const results: string[] = []
+	const preflightFindings: Finding[] = []
 	const unexpectedPaths: string[] = []
+
 	for (const file of files) {
 		if (!file.isDirectory()) {
 			unexpectedPaths.push(file.name)
 			continue
 		}
-		const valid = await folderHasValidInfoJson(path.join(basePath, file.name), sorter)
+		const valid = await isValidModFolder(path.join(basePath, file.name), modName, version, preflightFindings)
 		if (valid) {
 			results.push(path.join(basePath, file.name))
 		} else {
 			unexpectedPaths.push(file.name)
 		}
 	}
+
 	if (unexpectedPaths.length > 0) {
-		sorter.addFinding({
+		preflightFindings.push({
 			type: "UnexpectedPaths",
 			description: "The mod contains unexpected folders in the root directory.",
 			paths: unexpectedPaths,
 		})
 	}
+
 	if (results.length === 0) {
-		sorter.addFinding({
+		preflightFindings.push({
 			type: "MissingInfoJson",
 			description: "The mod does not contain a folder with a valid info.json file.",
 		})
 		return null
 	}
+
 	if (results.length > 1) {
-		sorter.addFinding({
+		preflightFindings.push({
 			type: "MultipleInfoJson",
 			description: "The mod contains multiple folders with valid info.json files.",
 			paths: results,
 		})
 		return null
 	}
-	return results[0]!
+
+	return { folderPath: results[0]!, preflightFindings }
 }
 
-async function folderHasValidInfoJson(folderPath: string, sorter: AuditReportBuilder): Promise<boolean> {
+async function isValidModFolder(
+	folderPath: string,
+	modName: string,
+	version: string,
+	findings: Finding[],
+): Promise<boolean> {
 	const infoJsonPath = path.join(folderPath, "info.json")
 	const data = JSON.parse((await readFile(infoJsonPath, "utf-8").catch(() => "{}")) || "{}")
-	if (!data.name || !data.version) {
-		return false
-	}
-	if (data.name !== sorter.modName || data.version !== sorter.version) {
-		sorter.addFinding({
+	if (!data.name || !data.version) return false
+	if (data.name !== modName || data.version !== version) {
+		findings.push({
 			type: "MismatchedInfoJson",
 			description:
 				"The mod contains an info.json file, but the name or version does not match the expected values.",
-			path: infoJsonPath,
+			paths: [infoJsonPath],
 		})
 		return false
 	}
 	return true
+}
+
+/**
+ * Scanner that validates info.json schema, dependencies, and metadata quality.
+ */
+export class MetadataScanner extends Scanner {
+	readonly id = "metadata"
+	readonly weight = 30
+
+	async scan(modPath: string): Promise<ScannerResult> {
+		const findings: Finding[] = []
+		const infoJsonPath = path.join(modPath, "info.json")
+		const data = JSON.parse((await readFile(infoJsonPath, "utf-8").catch(() => "{}")) || "{}")
+		const result = infoJsonSchema.safeParse(data)
+
+		if (!result.success) {
+			findings.push({
+				type: "InvalidInfoJson",
+				description: z.prettifyError(result.error),
+			})
+			return { id: this.id, score: 0, weight: this.weight, savings: 0, findings }
+		}
+
+		for (const dep of result.data.dependencies) {
+			const regex = /^(?:(?:!|\?|\(\?\)|~) ?)?(?:[0-9a-zA-Z\-_ ]+)(?: (?:<=|>=|=|<|>) ?\d+(?:\.\d+(?:\.\d+)?)?)?$/
+			if (!regex.test(dep)) {
+				findings.push({
+					type: "InvalidDependency",
+					description: `The mod has an invalid dependency format: "${dep}".`,
+				})
+			}
+		}
+
+		// Score: start at 100, deduct per finding
+		const score = Math.max(0, 100 - findings.length * 25)
+		return { id: this.id, score, weight: this.weight, savings: 0, findings }
+	}
 }

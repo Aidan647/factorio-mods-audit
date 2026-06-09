@@ -1,0 +1,124 @@
+import type { ModListItem, Release } from "../modportal/types"
+import type { ScannerResult } from "../scanner/base"
+import { saveReportToDisk } from "./save"
+
+export type Finding = {
+	type: string
+	description: string
+	severity?: "low" | "medium" | "high"
+
+	/**
+	 * potential saving in bytes if this finding is fixed.
+	 */
+	potentialSavings?: number
+
+	/** Paths related to this finding, if any. */
+	paths?: string[]
+}
+
+export type ScannerReport = {
+	id: string
+	score: number
+	weight: number
+	savings: number
+	findings: Finding[]
+}
+
+export type AuditReport = {
+	modName: string
+	version: string
+	sha1: string
+	timestamp: number
+	modSize?: number
+	score: number
+	potentialSavings?: number
+	percentageSavings?: number
+	scanners: ScannerReport[]
+	preflightFindings?: Finding[]
+	errors?: string[]
+}
+
+export class ReportBuilder {
+	readonly errors: Error[] = []
+	readonly preflightFindings: Finding[] = []
+	readonly scannerResults: ScannerResult[] = []
+	modSize = 0
+	readonly modName: string
+	readonly version: string
+	readonly sha1: string
+
+	constructor(
+		modInfo: ModListItem,
+		release?: Release,
+		private readonly reportsDir: string = "./reports",
+	) {
+		this.modName = modInfo.name
+		this.version = release?.version ?? modInfo.latest_release?.version ?? "unknown"
+		this.sha1 = release?.sha1 ?? modInfo.latest_release?.sha1 ?? "unknown"
+	}
+
+	addPreflightFinding(finding: Finding): this {
+		this.preflightFindings.push(finding)
+		return this
+	}
+
+	addError(error: Error): this {
+		this.errors.push(error)
+		return this
+	}
+
+	addScannerResult(result: ScannerResult): this {
+		this.scannerResults.push(result)
+		return this
+	}
+
+	setModSize(size: number): this {
+		this.modSize = size
+		return this
+	}
+
+	get totalSavings(): number {
+		return this.scannerResults.reduce((sum, r) => sum + r.savings, 0)
+	}
+
+	get finalScore(): number {
+		if (this.scannerResults.length === 0) return 0
+		const totalWeight = this.scannerResults.reduce((sum, r) => sum + r.weight, 0)
+		if (totalWeight === 0) return 0
+		const shift = 10
+		const product = this.scannerResults.reduce(
+			(prod, r) => prod * Math.pow((r.score + shift) / (100 + shift), r.weight / totalWeight),
+			1,
+		)
+		return Math.max(0, Math.min(100, Math.round((100 + shift) * product - shift)))
+	}
+
+	async saveReport(): Promise<AuditReport> {
+		const scanners: ScannerReport[] = this.scannerResults.map((r) => ({
+			id: r.id,
+			score: r.score,
+			weight: r.weight,
+			savings: r.savings,
+			findings: r.findings,
+		}))
+
+		const report: AuditReport = {
+			modName: this.modName,
+			version: this.version,
+			sha1: this.sha1,
+			timestamp: Date.now(),
+			score: this.finalScore,
+			scanners,
+		}
+		if (this.modSize > 0) report.modSize = this.modSize
+		const savings = this.totalSavings
+		if (savings > 0) report.potentialSavings = savings
+		if (this.modSize > 0 && savings > 0)
+			report.percentageSavings = Math.round((savings / this.modSize) * 10000) / 100
+		if (this.preflightFindings.length > 0) report.preflightFindings = this.preflightFindings
+		if (this.errors.length > 0) report.errors = this.errors.map((e) => e.message)
+
+		await saveReportToDisk(report, this.reportsDir)
+		return report
+	}
+}

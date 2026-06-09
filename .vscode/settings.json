@@ -35,6 +35,22 @@
 		"/^prettier --write \\.$/": {
 			"approve": true,
 			"matchCommandLine": true
+		},
+		"/^bun typecheck 2>&1$/": {
+			"approve": true,
+			"matchCommandLine": true
+		},
+		"/^bun format 2>&1$/": {
+			"approve": true,
+			"matchCommandLine": true
+		},
+		"/^bun test 2>&1$/": {
+			"approve": true,
+			"matchCommandLine": true
+		},
+		"/^bun typecheck 2>&1 && bun test 2>&1$/": {
+			"approve": true,
+			"matchCommandLine": true
 		}
 	},
 	"js/ts.tsdk.path": "node_modules/typescript/lib",
