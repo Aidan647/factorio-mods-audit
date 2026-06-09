@@ -3,7 +3,7 @@ import fs from "fs/promises"
 import { createHash } from "crypto"
 import type { ModPortal } from "../modportal"
 import type { ModListItem, Release } from "../modportal/types"
-import { AuditSorter, type AuditReport, type Finding } from "../findingsSorter"
+import { AuditReportBuilder, type AuditReport, type Finding } from "../findingsSorter"
 import path from "path"
 import { scanFile, Verdict } from "../helpers/scanfile"
 import { analyzeInfoJson } from "./infojson"
@@ -46,7 +46,7 @@ export class Scanner {
 		if (!mod.latest_release) throw new Error("No latest release found for mod: " + mod.name)
 		if (mod.latest_release.sha1 in this.scannedIndex) return "Scanned recently, skipping"
 
-		const sorter = new AuditSorter(mod, mod.latest_release)
+		const sorter = new AuditReportBuilder(mod, mod.latest_release)
 		const downloadResult = await this.downloadAndUnpack(mod.latest_release, sorter)
 		// If downloadResult is false, it means the mod was flagged as malicious or there was an error during scanning/unpacking.
 		// In either case, we should save the report and not proceed further.
@@ -62,7 +62,7 @@ export class Scanner {
 		return this.cleanup(sorter, true)
 	}
 
-	async downloadAndUnpack(mod: Release, sorter: AuditSorter): Promise<boolean> {
+	async downloadAndUnpack(mod: Release, sorter: AuditReportBuilder): Promise<boolean> {
 		const data = await this.portal.downloadRelease(mod).catch((err: Error) => {
 			if (err.message === "File is malicious")
 				sorter.addFinding({
@@ -74,9 +74,9 @@ export class Scanner {
 		})
 		if (!data) return false
 
-		return await this.UnpackAndScan(data, sorter)
+		return await this.unpackAndScan(data, sorter)
 	}
-	async UnpackAndScan(data: Buffer, sorter: AuditSorter): Promise<boolean> {
+	async unpackAndScan(data: Buffer, sorter: AuditReportBuilder): Promise<boolean> {
 		const tempPath = path.join("./cache/tmp", `${sorter.modName}-${sorter.version}/`)
 		await fs.mkdir(tempPath, { recursive: true })
 		const { entries } = await unzip(data)
@@ -101,7 +101,7 @@ export class Scanner {
 			const arrayBuffer = await entry.arrayBuffer()
 			await fs.writeFile(outputPath, Buffer.from(arrayBuffer))
 		}
-		if (sorter.errors.length !== 0 && sorter.findings.length !== 0) return false
+		if (sorter.errors.length !== 0 || sorter.findings.length !== 0) return false
 		const verdict = await scanFile(tempPath)
 		if (verdict === Verdict.Malicious) {
 			sorter.addFinding({
@@ -115,9 +115,9 @@ export class Scanner {
 		}
 		return true
 	}
-	async cleanup(sorter: AuditSorter, save?: false): Promise<false>
-	async cleanup(sorter: AuditSorter, save: true): Promise<AuditReport>
-	async cleanup(sorter: AuditSorter, save = false): Promise<false | AuditReport> {
+	async cleanup(sorter: AuditReportBuilder, save?: false): Promise<false>
+	async cleanup(sorter: AuditReportBuilder, save: true): Promise<AuditReport>
+	async cleanup(sorter: AuditReportBuilder, save = false): Promise<false | AuditReport> {
 		const tempPath = path.join("./cache/tmp", `${sorter.modName}-${sorter.version}/`)
 		await fs.rm(tempPath, { recursive: true, force: true })
 

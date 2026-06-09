@@ -6,9 +6,9 @@
 
 - [x] **Factorio API client** — fetch mod metadata + download zip from `mods.factorio.com/api/mods`
 - [x] **Zip extraction** — unzip mod file in-memory or to temp dir
-- [ ] **Malware scan** — check for PE/ELF headers, high-entropy (packed) blobs
+- [x] **Malware scan** — check for PE/ELF headers, high-entropy (packed) blobs
 - [ ] **PNG analysis** — compression ratio vs raw pixel data; flag unnecessary chunks (`tEXt`, `iTXt`, `zTXt`)
-- [ ] **Structure analysis** — detect `.git/`, `node_modules/`, `.DS_Store`, `.exe`, `.dll`, oversized files
+- [x] **Structure analysis** — detect `.git/`, `node_modules/`, `.DS_Store`, `.exe`, `.dll`, oversized files
 - [ ] **Scoring system** — start at 100, deduct per finding
 - [ ] **Report output** — text + JSON formats, save to `.audit/reports/`
 - [ ] **CLI arg parsing** — `--mod`, `--json`, `--no-cleanup`, `--output`

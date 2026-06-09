@@ -1,6 +1,6 @@
 import z from "zod"
 import path from "node:path"
-import type { AuditSorter } from "../findingsSorter"
+import type { AuditReportBuilder } from "../findingsSorter"
 import { readdir, readFile } from "node:fs/promises"
 
 const versionFormat = z.stringFormat("versionFormat", (value) => {
@@ -54,7 +54,7 @@ type InfoJson = z.infer<typeof infoJsonSchema>
  * Detect folder path modiname_version or modname,
  * scans the info.json for any malicious content, and returns the mod name and version.
  */
-export async function analyzeInfoJson(sorter: AuditSorter): Promise<string | null> {
+export async function analyzeInfoJson(sorter: AuditReportBuilder): Promise<string | null> {
 	const folderPath = await scanForFolder(sorter)
 	if (!folderPath) return null
 	const infoJsonPath = path.join(folderPath, "info.json")
@@ -62,7 +62,7 @@ export async function analyzeInfoJson(sorter: AuditSorter): Promise<string | nul
 	return folderPath
 }
 
-async function validateInfoJson(infoJsonPath: string, sorter: AuditSorter): Promise<boolean> {
+async function validateInfoJson(infoJsonPath: string, sorter: AuditReportBuilder): Promise<boolean> {
 	const data = JSON.parse((await readFile(infoJsonPath, "utf-8").catch(() => "{}")) || "{}")
 	const result = infoJsonSchema.safeParse(data)
 	if (!result.success) {
@@ -85,7 +85,7 @@ async function validateInfoJson(infoJsonPath: string, sorter: AuditSorter): Prom
 	return true
 }
 
-async function scanForFolder(sorter: AuditSorter): Promise<string | null> {
+async function scanForFolder(sorter: AuditReportBuilder): Promise<string | null> {
 	const basePath = path.join("./cache/tmp", `${sorter.modName}-${sorter.version}/`)
 	const files = await readdir(basePath, { withFileTypes: true })
 	const results: string[] = []
@@ -127,7 +127,7 @@ async function scanForFolder(sorter: AuditSorter): Promise<string | null> {
 	return results[0]!
 }
 
-async function folderHasValidInfoJson(folderPath: string, sorter: AuditSorter): Promise<boolean> {
+async function folderHasValidInfoJson(folderPath: string, sorter: AuditReportBuilder): Promise<boolean> {
 	const infoJsonPath = path.join(folderPath, "info.json")
 	const data = JSON.parse((await readFile(infoJsonPath, "utf-8").catch(() => "{}")) || "{}")
 	if (!data.name || !data.version) {

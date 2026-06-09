@@ -2,7 +2,7 @@ import { Glob, JSON5 } from "bun"
 import { z } from "zod"
 import path from "node:path"
 import { readFile, readdir } from "node:fs/promises"
-import type { AuditSorter, Finding } from "#/findingsSorter"
+import type { AuditReportBuilder, Finding } from "#/findingsSorter"
 import { getSize } from "#/helpers/getFolder"
 
 type ClutterRule = {
@@ -16,12 +16,14 @@ type ClutterRule = {
 
 type CompiledClutterRule = ClutterRule & {
 	matcher: Glob
+	// TODO: precompiled Glob for faster matching
+	matcherExceptions?: Glob
 }
 
 async function loadClutterRules(): Promise<CompiledClutterRule[]> {
 	const cfgPath = process.env.CLUTTER_RULES_PATH || path.join(process.cwd(), "config/clutter-rules.json5")
 	const raw = await readFile(cfgPath, "utf-8").catch(() => "{}")
-	const parsed = JSON5.parse(raw) as any
+	const parsed = JSON5.parse(raw)
 	const compiled: CompiledClutterRule[] = []
 
 	const Schema = z.object({
@@ -65,7 +67,7 @@ async function loadClutterRules(): Promise<CompiledClutterRule[]> {
 }
 const compiledRules = await loadClutterRules()
 
-export async function findClutterFiles(sorter: AuditSorter, basePath: string) {
+export async function findClutterFiles(sorter: AuditReportBuilder, basePath: string) {
 	const findings = await scanDirectory(basePath)
 	// group findings by type and save to report
 	const findingsByType: Record<

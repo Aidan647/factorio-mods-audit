@@ -1,6 +1,6 @@
-import type { AuditSorter } from "#/findingsSorter"
+import type { AuditReportBuilder } from "#/findingsSorter"
 import { findClutterFiles } from "./developingFiles"
 
-export async function scanForFiles(sorter: AuditSorter, basePath: string) {
+export async function scanForFiles(sorter: AuditReportBuilder, basePath: string) {
 	await findClutterFiles(sorter, basePath)
 }

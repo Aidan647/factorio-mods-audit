@@ -29,7 +29,7 @@ export class ModPortal {
 		this.modInfoCache = new MemoryCache<ModInfo>({ expiryMs: 5 * 60 * 1000 /* 5m */ })
 	}
 
-	private async enshureDownloadCache(): Promise<DiskCache<Buffer>> {
+	private async ensureDownloadCache(): Promise<DiskCache<Buffer>> {
 		if (!this.downloadCache) {
 			if (!this.downloadCachePromise) {
 				this.downloadCachePromise = DiskCache.create<Buffer>({
@@ -93,7 +93,7 @@ export class ModPortal {
 
 	async downloadRelease(data: Release) {
 		const downloadUrl = `${this.config.baseUrl}${data.download_url}?username=${this.config.username}&token=${this.config.token}`
-		const downloadCache = await this.enshureDownloadCache()
+		const downloadCache = await this.ensureDownloadCache()
 
 		const cachedBuf = await downloadCache.get(data.sha1)
 		if (cachedBuf) return cachedBuf

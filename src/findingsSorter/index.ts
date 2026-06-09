@@ -27,12 +27,12 @@ export type AuditReport = {
 	timestamp: number
 	potentialSavings?: number
 	modSize?: number
-	persentageSavings?: number
+	percentageSavings?: number
 	findings?: Finding[]
 	errors?: string[]
 }
 
-export class AuditSorter {
+export class AuditReportBuilder {
 	readonly findings: Finding[] = []
 	readonly errors: Error[] = []
 	potentialSavings = 0
@@ -74,7 +74,7 @@ export class AuditSorter {
 		if (this.modSize > 0) report.modSize = this.modSize
 		if (this.potentialSavings > 0) report.potentialSavings = this.potentialSavings
 		if (this.modSize > 0 && this.potentialSavings > 0)
-			report.persentageSavings = (this.potentialSavings / this.modSize) * 100
+			report.percentageSavings = (this.potentialSavings / this.modSize) * 100
 		if (this.findings.length > 0) report.findings = this.findings
 		if (this.errors.length > 0) report.errors = this.errors.map((e) => e.message)
 		const dir = `./reports/${report.errors ? "errored" : report.findings ? "found" : "clean"}`
