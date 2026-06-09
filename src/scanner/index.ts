@@ -8,6 +8,7 @@ import path from "path"
 import { scanFile, Verdict } from "../helpers/scanfile"
 import { analyzeInfoJson } from "./infojson"
 import { scanForFiles } from "./files"
+import { getSize } from "#/helpers/getFolder"
 
 await fs.rm("./cache/tmp", { recursive: true, force: true })
 await fs.mkdir("./cache/tmp", { recursive: true })
@@ -50,8 +51,11 @@ export class Scanner {
 		// If downloadResult is false, it means the mod was flagged as malicious or there was an error during scanning/unpacking.
 		// In either case, we should save the report and not proceed further.
 		if (!downloadResult) return this.cleanup(sorter, true)
-		const modPath = await analyzeInfoJson(sorter)
+			const modPath = await analyzeInfoJson(sorter)
 		if (!modPath) return this.cleanup(sorter, true)
+		await getSize(modPath)
+			.then((size) => sorter.setModSize(size))
+			.catch(() => {})
 
 		await scanForFiles(sorter, modPath)
 

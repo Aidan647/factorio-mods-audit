@@ -37,11 +37,13 @@ export type ModListItem = z.infer<typeof ModListItem>
 
 export const ModList = z.object({
 	results: z.array(ModListItem),
-	pagination: z.object({
-		count: z.number(),
-		page: z.number(),
-		page_count: z.number(),
-		page_size: z.number(),
-	}),
+	pagination: z
+		.object({
+			count: z.number(),
+			page: z.number(),
+			page_count: z.number(),
+			page_size: z.number(),
+		})
+		.nullable(),
 })
 export type ModList = z.infer<typeof ModList>

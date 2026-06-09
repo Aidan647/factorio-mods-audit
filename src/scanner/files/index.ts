@@ -1,8 +1,8 @@
 import type { AuditSorter } from "#/findingsSorter"
-import { findDevelopingFiles } from "./developingFiles"
+import { findClutterFiles } from "./developingFiles"
 
 
 
 export async function scanForFiles(sorter: AuditSorter, basePath: string) {
-	await findDevelopingFiles(sorter, basePath)
+	await findClutterFiles(sorter, basePath)
 }

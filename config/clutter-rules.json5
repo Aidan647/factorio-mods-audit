@@ -1,0 +1,152 @@
+	{
+		// Array of rule objects: { type, description, globs: string[] }
+		rules: [
+			{
+				type: "backup",
+				description: "Temporary editor state files should never be shipped in ModPortal zips.",
+				category: "dev",
+				severity: "low",
+				globs: ["*~", "*.bak", "*.orig", "*.rej", "*.swp", "*.swo"],
+			},
+			{
+				type: "temp",
+				description: "Scratch files and temporary directories do not belong in published mods.",
+				category: "dev",
+				severity: "low",
+				globs: ["*.tmp", "*.temp", "tmp/**", "temp/**", ".tmp/**", ".temp/**"],
+			},
+			{
+				type: "logs",
+				description: "Logs are generated locally and should not be published.",
+				category: "dev",
+				severity: "low",
+				globs: ["*.log", "*.out", "*.err", "*.trace"],
+			},
+			{
+				type: "compressed",
+				description: "Archives are often release leftovers or accidental nested packages.",
+				category: "build",
+				severity: "medium",
+				globs: ["*.rar", "*.7z", "*.tar", "*.gz", "*.bz2", "*.xz", "*.tgz", "*.tbz2", "*.tar.gz", "*.tar.xz"],
+			},
+			{
+				type: "executable",
+				description: "Published mods should not include local binaries or installation scripts.",
+				category: "dev",
+				severity: "high",
+				globs: ["*.exe", "*.dll", "*.so", "*.bin", "*.sh", "*.bat", "*.cmd", "*.ps1", "*.msi", "*.apk"],
+			},
+			{
+				type: "image",
+				description: "The mod should ship exported PNGs, not alternate raster formats.",
+				category: "assets",
+				severity: "medium",
+				globs: ["*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.tiff"],
+			},
+			{
+				type: "video",
+				description: "Videos are not needed in published mod bundles.",
+				category: "assets",
+				severity: "low",
+				globs: ["*.mp4", "*.avi", "*.mkv", "*.mov", "*.wmv"],
+			},
+			{
+				type: "audio",
+				description: "Source audio formats should stay out of release bundles unless exported to .ogg.",
+				category: "assets",
+				severity: "medium",
+				globs: ["*.mp3", "*.wav", "*.flac", "*.aac"],
+			},
+
+			// Version control and editor folders/metadata (should never be published)
+			{
+				type: "vcs",
+				description: "Repository metadata is not part of the release payload.",
+				category: "dev",
+				severity: "high",
+				globs: [".git", ".github", ".gitignore", ".gitattributes", ".gitmodules", ".svn", ".hg", ".bzr"],
+			},
+
+			{
+				type: "ide",
+				description: "Editor state and workspace config should stay out of published mods.",
+				category: "dev",
+				severity: "medium",
+				globs: [".vscode", ".idea", "*.sublime-project", "*.sublime-workspace", ".vs", "*.code-workspace", "*.iml"],
+			},
+
+			// Node / JS / toolkit artifacts and build outputs (dev only)
+			{
+				type: "nodeArtifacts",
+				description: "Tooling dependencies and build artifacts are not release assets.",
+				category: "dev",
+				severity: "high",
+				globs: [
+					"node_modules",
+					"dist",
+					"build",
+					"out",
+					"package-lock.json",
+					"yarn.lock",
+					"pnpm-lock.yaml",
+					"package.json",
+					"*.tsbuildinfo",
+					".npm",
+					".yarn",
+					".pnpm",
+					".eslintcache",
+					".turbo"
+				],
+			},
+
+			// Test and CI artifacts
+			{
+				type: "testReports",
+				description: "Test output and coverage are useful locally but should not ship.",
+				category: "dev",
+				severity: "medium",
+				globs: ["coverage", "test-results", "reports", "*.spec.*", "*.test.*", "junit.xml", "coverage.xml", "lcov.info"],
+			},
+
+			// Image source files from image editing projects (GIMP, Krita, Photoshop, etc.)
+			{
+				type: "imageSources",
+				description: "Image project sources are not release assets; export PNGs instead.",
+				category: "assets",
+				severity: "medium",
+				globs: ["*.xcf", "*.kra", "*.psd", "*.ora", "*.ai", "*.svg", "*.psb", "*.xcf.bak", "*.kra~", "*.ora~"],
+			},
+
+			// Compiled/temporary artifacts from other languages/tools
+			{
+				type: "compiled",
+				description: "Generated binaries and caches should not be included in release archives.",
+				category: "build",
+				severity: "high",
+				globs: ["__pycache__", "*.pyc", "*.class", "*.jar", "*.luac", "*.o", "*.obj", "*.dylib", "*.pdb", "*.cache", "*.map"],
+			},
+			{
+				type: "code",
+				description: "Source and data files that should not ship in a Factorio release bundle.",
+				category: "dev",
+				severity: "medium",
+				globs: ["*.java", "*.csv", "*.js", "*.jsx", "*.mjs", "*.cjs", "*.ts", "*.tsx", "*.mts", "*.cts", "*.d.ts"],
+			},
+
+			// Secrets and keys (should never be published)
+			{
+				type: "secrets",
+				description: "Secrets and private keys must never be published.",
+				category: "secrets",
+				severity: "high",
+				globs: [".env", "*.env", "*.env.local", "*.pem", "*.key", "*.crt", "*.p12", "*.pfx", "id_rsa*", "secrets.*"],
+			},
+
+			// Catch-all: hidden dotfiles — moved to bottom so other rules match first
+			{
+				type: "dotFiles",
+				description: "Hidden dotfiles should be treated as clutter unless explicitly allowed.",
+				globs: [".*"],
+			},
+		],
+	}

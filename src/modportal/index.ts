@@ -1,5 +1,5 @@
 import z from "zod"
-import { ModInfo, ModList, Release } from "./types"
+import { ModInfo, ModList, ModListItem, Release } from "./types"
 import { MemoryCache, DiskCache } from "../helpers/cache"
 import { createRateLimiter } from "../helpers/ratelimiter"
 import { scanBuffer } from "../helpers/scanfile"
@@ -65,6 +65,21 @@ export class ModPortal {
 		)
 		const parsed = ModList.parse(await response.json())
 		return parsed
+	}
+	async getPopularMods(): Promise<ModListItem[]> {
+		const response = await this.fetch(`${this.config.baseUrl}api/mods?page_size=max`)
+		const parsed = ModList.parse(await response.json())
+		return parsed.results.sort((a, b) => b.score - a.score)
+	}
+	async getMostDownloadedMods(): Promise<ModListItem[]> {
+		const response = await this.fetch(`${this.config.baseUrl}api/mods?page_size=max`)
+		const parsed = ModList.parse(await response.json())
+		return parsed.results.sort((a, b) => b.downloads_count - a.downloads_count)
+	}
+	async getModsByAuthor(...authors: string[]): Promise<ModListItem[]> {
+		const response = await this.fetch(`${this.config.baseUrl}api/mods?page_size=max`)
+		const parsed = ModList.parse(await response.json())
+		return parsed.results.filter((mod) => authors.includes(mod.owner))
 	}
 	async downloadLatestRelease(modName: string) {
 		const modInfo = await this.getModInfo(modName)

@@ -5,6 +5,7 @@ import { JSON5 } from "bun"
 export type Finding = {
 	type: string
 	description: string
+	severity?: "low" | "medium" | "high"
 
 	/**
 	 * potential saving in bytes if this finding is fixed.
@@ -24,15 +25,18 @@ export type AuditReport = {
 	version: string
 	sha1: string
 	timestamp: number
+	potentialSavings?: number
+	modSize?: number
+	persentageSavings?: number
 	findings?: Finding[]
 	errors?: string[]
-	potentialSavings?: number
 }
 
 export class AuditSorter {
 	readonly findings: Finding[] = []
 	readonly errors: Error[] = []
 	potentialSavings = 0
+	modSize = 0
 	readonly modName: string
 	readonly version: string
 	readonly sha1: string
@@ -45,11 +49,16 @@ export class AuditSorter {
 
 	addFinding(finding: Finding): this {
 		this.findings.push(finding)
-		if (finding.potentialSavings) this.potentialSavings += finding.potentialSavings
+		if (finding.potentialSavings && finding.potentialSavings > 0) this.potentialSavings += finding.potentialSavings
 		return this
 	}
 	addError(error: Error): this {
 		this.errors.push(error)
+		return this
+	}
+
+	setModSize(size: number): this {
+		this.modSize = size
 		return this
 	}
 
@@ -62,10 +71,12 @@ export class AuditSorter {
 			sha1: this.sha1,
 			timestamp: Date.now(),
 		}
+		if (this.modSize > 0) report.modSize = this.modSize
+		if (this.potentialSavings > 0) report.potentialSavings = this.potentialSavings
+		if (this.modSize > 0 && this.potentialSavings > 0)
+			report.persentageSavings = (this.potentialSavings / this.modSize) * 100
 		if (this.findings.length > 0) report.findings = this.findings
 		if (this.errors.length > 0) report.errors = this.errors.map((e) => e.message)
-		if (this.potentialSavings > 0) report.potentialSavings = this.potentialSavings
-
 		const dir = `./reports/${report.errors ? "errored" : report.findings ? "found" : "clean"}`
 		await mkdir(dir, { recursive: true })
 		await Bun.write(`${dir}/${this.modName}-${this.version}.json`, JSON.stringify(report, null, "\t") ?? "")

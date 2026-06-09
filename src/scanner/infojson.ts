@@ -31,7 +31,7 @@ const infoJsonSchema = z.object({
 		.string()
 		.min(3)
 		.max(50)
-		.regex(/^[0-9a-zA-Z\-_]+$/),
+		.regex(/^[0-9a-zA-Z\-_ ]+$/),
 	version: versionFormat,
 	title: z.string().max(100),
 	author: z.union([z.string(), z.array(z.string())]),
@@ -74,7 +74,7 @@ async function validateInfoJson(infoJsonPath: string, sorter: AuditSorter): Prom
 	}
 
 	for (const dep of result.data.dependencies) {
-		const regex = /^(?:(?:!|\?|\(\?\)|~) ?)?(?:[0-9a-zA-Z\-_]+)(?: (?:<=|>=|=|<|>) ?\d+(?:\.\d+(?:\.\d+)?)?)?$/
+		const regex = /^(?:(?:!|\?|\(\?\)|~) ?)?(?:[0-9a-zA-Z\-_ ]+)(?: (?:<=|>=|=|<|>) ?\d+(?:\.\d+(?:\.\d+)?)?)?$/
 		if (!regex.test(dep)) {
 			sorter.addFinding({
 				type: "InvalidDependency",

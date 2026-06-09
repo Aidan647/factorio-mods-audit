@@ -2,15 +2,21 @@ import { readdir, stat } from "node:fs/promises"
 import path from "node:path"
 
 export async function getFolderRecursively(basePath: string) {
-	const files = await readdir(basePath, { withFileTypes: true, recursive: true })
 	const results: string[] = []
-	for (const file of files) {
-		if (file.isDirectory()) {
+	await collectFiles(basePath, results)
+	return results
+}
+
+async function collectFiles(currentPath: string, results: string[]) {
+	const entries = await readdir(currentPath, { withFileTypes: true })
+	for (const entry of entries) {
+		const entryPath = path.join(currentPath, entry.name)
+		if (entry.isDirectory()) {
+			await collectFiles(entryPath, results)
 			continue
 		}
-		results.push(path.join(basePath, file.name))
+		results.push(entryPath)
 	}
-	return results
 }
 /**
  * get size of file or folder in bytes. For folders, get size of all files recursively.
@@ -21,14 +27,12 @@ export async function getSize(filePath: string): Promise<number> {
 		return stats.size
 	} else if (stats.isDirectory()) {
 		let totalSize = 0
-		const files = await readdir(filePath, { withFileTypes: true, recursive: true })
+		const files = await getFolderRecursively(filePath)
 		for (const file of files) {
-			if (file.isFile()) {
-				const fileStats = await stat(path.join(filePath, file.name))
-				totalSize += fileStats.size
-			}
-			return totalSize
+			const fileStats = await stat(file)
+			totalSize += fileStats.size
 		}
+		return totalSize
 	}
 	return -1
 }
