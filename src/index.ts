@@ -23,7 +23,7 @@ for (const mod of mods) {
 	if (!mod.latest_release) continue
 	const report = await scanner.scanMod(mod)
 	if (typeof report === "string") continue
-	console.log(`Scanned ${report.modName} v${report.version}`);
+	console.log(`Scanned ${report.modName} v${report.version}`)
 	scannedCount++
 	if (report.findings) {
 		console.log(`- Potential Savings: ${report.persentageSavings?.toFixed(2) ?? "0"}%`)
