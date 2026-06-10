@@ -148,7 +148,12 @@ describe("ReportBuilder", () => {
 		expect(report.modName).toBe("test-mod")
 		expect(report.version).toBe("1.0.0")
 		expect(report.sha1).toBe("abc123def456")
-		expect(report.score).toBe(calculateScore([{ score: 90, weight: 30 }, { score: 80, weight: 40 }]))
+		expect(report.score).toBe(
+			calculateScore([
+				{ score: 90, weight: 30 },
+				{ score: 80, weight: 40 },
+			]),
+		)
 		expect(report.modSize).toBe(10000)
 		expect(report.potentialSavings).toBe(500)
 		expect(report.percentageSavings).toBe(5)

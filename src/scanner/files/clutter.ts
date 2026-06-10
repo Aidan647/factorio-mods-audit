@@ -79,6 +79,8 @@ export class ClutterScanner extends Scanner {
 	async scan(modPath: string, sorter: ReportBuilder): Promise<ScannerResult> {
 		if (!this.rules) this.rules = await loadClutterRules()
 		const findings = await this.walkDirectory(modPath)
+		const extraFindings = await this.scanParentDir(modPath)
+		findings.push(...extraFindings)
 		const grouped = this.groupFindings(findings)
 		const totalSavings = grouped.reduce((sum, f) => sum + (f.potentialSavings ?? 0), 0)
 
@@ -95,8 +97,33 @@ export class ClutterScanner extends Scanner {
 		}
 		const weightedSavings = savings.low * 0.75 + savings.medium * 1 + savings.high * 1.25
 		const wasteRatio = Math.min(weightedSavings / modSize, 1)
-		const score = 100 * (1 - wasteRatio ** 0.25)
+		const score = 100 * (1 - wasteRatio ** 0.3)
 		return { id: this.id, score, weight: this.weight, savings: totalSavings, findings: grouped }
+	}
+
+	/**
+	 * Scan the parent directory for entries that aren't the mod folder itself.
+	 * These are files/folders accidentally included at the wrong zip level.
+	 */
+	private async scanParentDir(modPath: string): Promise<Finding[]> {
+		const findings: Finding[] = []
+		const parentDir = path.join(modPath, "..")
+		const modName = path.basename(modPath)
+		const entries = await readdir(parentDir, { withFileTypes: true }).catch(() => [])
+
+		for (const entry of entries) {
+			if (entry.name === modName) continue
+			const entryPath = path.join(parentDir, entry.name)
+			const relativePath = path.relative(modPath, entryPath)
+			findings.push({
+				type: "clutter:extra-parent-entry",
+				description: `Unexpected file/folder found alongside mod directory in zip: ${entry.name}`,
+				severity: "high",
+				paths: [relativePath],
+				potentialSavings: await getSize(entryPath).catch(() => 0),
+			})
+		}
+		return findings
 	}
 
 	private groupFindings(findings: Finding[]): Finding[] {

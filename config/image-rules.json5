@@ -1,0 +1,66 @@
+{
+	// Image validation rules — each rule defines paths to check and size thresholds.
+	// Size values can be a number (square) or { width, height } for rectangles.
+	// maxMipmaps: maximum number of mipmap levels allowed (0 = no mipmaps, base image only).
+	// Mipmaps are smaller copies appended to the right of the base image.
+	// e.g. a 64px base with 3 mipmaps (32+16+8) = 120x64 total.
+	rules: [
+		{
+			type: "thumbnail",
+			description: "Thumbnail should be small and match expected dimensions.",
+			category: "meta",
+			severity: "low", // no effect on game ram usage
+			globs: ["thumbnail.png"],
+			optimal: 144,
+			max: 288,
+			maxMipmaps: 0,
+		},
+		{
+			type: "icons",
+			description: "Icons should be compact.",
+			category: "icons",
+			severity: "medium",
+			globs: ["graphics/icons/**.png"],
+			optimal: 64,
+			max: 64,
+			maxMipmaps: 3,
+		},
+		{
+			type: "item-group",
+			description: "Item group icons.",
+			category: "icons",
+			severity: "medium",
+			globs: ["graphics/item-group/**.png"],
+			optimal: 128,
+			max: 128,
+			maxMipmaps: 3,
+		},
+		{
+			type: "technology",
+			description: "Technology icons.",
+			category: "icons",
+			severity: "medium",
+			globs: ["graphics/technology/**.png"],
+			optimal: 256,
+			max: 512,
+			maxMipmaps: 3,
+		},
+		{
+			type: "achievement",
+			description: "Achievement icons.",
+			category: "icons",
+			severity: "medium",
+			globs: ["graphics/achievement/**.png"],
+			optimal: 128,
+			max: 256,
+			maxMipmaps: 3,
+		},
+		{
+			type: "imageOptimization",
+			description: "Images should be optimized",
+			category: "rest",
+			severity: "low",
+			globs: ["**.png"],
+		},
+	],
+}

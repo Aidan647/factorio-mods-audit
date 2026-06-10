@@ -6,7 +6,7 @@ import { ReportBuilder, type AuditReport } from "../report"
 import path from "path"
 import { scanFile, Verdict } from "../helpers/scanfile"
 import { findModFolder, MetadataScanner } from "./metadata"
-import { ClutterScanner } from "./files"
+import { ClutterScanner, ImagesScanner } from "./files"
 import { getSize } from "#/helpers/getFolder"
 import type { Scanner } from "./base"
 import { ScanIndex } from "./scan-index"
@@ -27,7 +27,7 @@ export class Orchestrator {
 	}
 
 	private readonly index: ScanIndex
-	private scanners: Scanner[] = [new MetadataScanner(), new ClutterScanner()]
+	private scanners: Scanner[] = [new MetadataScanner(), new ClutterScanner(), new ImagesScanner()]
 
 	async loadIndex(): Promise<this> {
 		await this.index.load()
@@ -45,7 +45,7 @@ export class Orchestrator {
 		if (!modPath) return this.cleanup(sorter, true)
 
 		// Measure mod size
-		await getSize(modPath)
+		await getSize(path.join(modPath, "..")) // gets total size of the unzipped folder, which is more relevant for size
 			.then((size) => sorter.setModSize(size))
 			.catch(() => {})
 

@@ -1,30 +1,25 @@
 export interface ScoreItem {
 	score: number // 0-100
-	weight: number // >0
+	weight: number // 0-100
 }
-
 
 export function calculateScore(
 	items: ScoreItem[],
-	minShift = 0.01,
-	maxShift = 0.75,
+	minShift = 0.01, // weight=100 // critical
+	maxShift = 0.5, // weight=0
 ): number {
-	if (items.length === 0) return 0
-	const totalWeight = items.reduce((s, i) => s + i.weight, 0)
-	if (totalWeight === 0) return 0
-
 	let result = 1
 
 	for (const item of items) {
-		const w = item.weight / totalWeight
+		const score = Math.max(0, Math.min(100, item.score))
+		const weight = Math.max(0, Math.min(100, item.weight))
 
-		// high weight => smaller shift
-		const shift = maxShift - (maxShift - minShift) * w
+		const shift = maxShift - (maxShift - minShift) * (weight / 100)
 
-		const factor = shift + (1 - shift) * (item.score / 100)
+		const deduction = (1 - score / 100) * (1 - shift)
 
-		result *= Math.pow(factor, w)
+		result *= 1 - deduction
 	}
 
-	return Math.max(0, Math.min(100, Math.round(result * 100)))
+	return result * 100
 }
