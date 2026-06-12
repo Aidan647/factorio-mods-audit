@@ -74,10 +74,9 @@ export async function checkImage(
 		}
 	}
 
-	const potentialSavings = await computeResizeSavings({ img: image, fileSize: size })
-	// add finding only if it has potential savings more than 5% of the original size to avoid noise
-	// thise is based on better compression rather than resizing, so we don't want to flag every image that could be slightly smaller with max compression
-	if (potentialSavings > size * 0.05) {
+	const potentialSavings = (await computeResizeSavings({ img: image, fileSize: size }))
+	// add finding only if it has potential savings more than 5% + 100 bytes of the original size to avoid noise
+	if (potentialSavings > size * 0.05 + 100) {
 		findings.push({
 			type: `images:compression`,
 			description: `Image has potential for better compression.`,

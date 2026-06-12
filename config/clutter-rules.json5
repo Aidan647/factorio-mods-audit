@@ -41,7 +41,7 @@
 			description: "The mod should ship exported PNGs, not alternate raster formats.",
 			category: "assets",
 			severity: "high",
-			globs: ["*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.tiff"],
+			globs: ["*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.tiff", "*.webp", "*.ico", "*.tga", "*.dds"],
 		},
 		{
 			type: "video",
@@ -56,6 +56,24 @@
 			category: "assets",
 			severity: "high",
 			globs: ["*.mp3", "*.wav", "*.flac", "*.aac"],
+		},
+
+		// Document formats that don't belong in mod bundles
+		{
+			type: "documents",
+			description: "Office documents and PDFs are not part of mod releases.",
+			category: "assets",
+			severity: "medium",
+			globs: ["*.pdf", "*.doc", "*.docx", "*.odt", "*.rtf"],
+		},
+
+		// Font binaries (unusual for most mods unless GUI-focused)
+		{
+			type: "fonts",
+			description: "Font files should only ship when the mod requires custom fonts.",
+			category: "assets",
+			severity: "low",
+			globs: ["*.ttf", "*.otf", "*.woff", "*.woff2"],
 		},
 
 		// Version control and editor folders/metadata (should never be published)
@@ -73,6 +91,15 @@
 			category: "dev",
 			severity: "medium",
 			globs: [".vscode", ".idea", "*.sublime-project", "*.sublime-workspace", ".vs", "*.code-workspace", "*.iml"],
+		},
+
+		// OS metadata files (commonly slip into zips)
+		{
+			type: "osMetadata",
+			description: "OS folder metadata and thumbnail caches should not be published.",
+			category: "dev",
+			severity: "high",
+			globs: [".DS_Store", "Thumbs.db", "Desktop.ini"],
 		},
 
 		// Node / JS / toolkit artifacts and build outputs (dev only)
@@ -144,6 +171,9 @@
 				"*.pdb",
 				"*.cache",
 				"*.map",
+				"*.wasm",
+				"*.ipynb",
+				".gradle",
 			],
 		},
 		{
@@ -151,7 +181,7 @@
 			description: "Source and data files that should not ship in a Factorio release bundle.",
 			category: "dev",
 			severity: "medium",
-			globs: ["*.java", "*.csv", "*.js", "*.jsx", "*.mjs", "*.cjs", "*.ts", "*.tsx", "*.mts", "*.cts", "*.d.ts"],
+			globs: ["*.java", "*.css", "*.scss", "*.sass", "*.less", "*.csv", "*.js", "*.jsx", "*.mjs", "*.cjs", "*.ts", "*.tsx", "*.mts", "*.cts", "*.d.ts", "*.py", "*.rb", "*.go", "*.rs", "*.swift", "*.php", "*.pl", "*.kt", "*.gradle"],
 		},
 
 		// Secrets and keys (should never be published)

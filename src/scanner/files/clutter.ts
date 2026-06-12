@@ -20,7 +20,7 @@ type CompiledClutterRule = ClutterRule & {
 	matcherExceptions?: Glob
 }
 
-async function loadClutterRules(): Promise<CompiledClutterRule[]> {
+export async function loadClutterRules(): Promise<CompiledClutterRule[]> {
 	const cfgPath = process.env.CLUTTER_RULES_PATH || path.join(process.cwd(), "config/clutter-rules.json5")
 	const raw = await readFile(cfgPath, "utf-8").catch(() => "{}")
 	const parsed = JSON5.parse(raw)
@@ -74,10 +74,10 @@ export class ClutterScanner extends Scanner {
 	readonly weight = 80
 
 	/** Lazy-loaded compiled rules, loaded once on first scan. */
-	private rules: CompiledClutterRule[] | null = null
+	static rules: CompiledClutterRule[] | null = null
 
 	async scan(modPath: string, sorter: ReportBuilder): Promise<ScannerResult> {
-		if (!this.rules) this.rules = await loadClutterRules()
+		if (!ClutterScanner.rules) ClutterScanner.rules = await loadClutterRules()
 		const findings = await this.walkDirectory(modPath)
 		const extraFindings = await this.scanParentDir(modPath)
 		findings.push(...extraFindings)
@@ -99,6 +99,7 @@ export class ClutterScanner extends Scanner {
 		const wasteRatio = Math.min(weightedSavings / modSize, 1)
 		const score = 100 * (1 - wasteRatio ** 0.3)
 		return { id: this.id, score, weight: this.weight, savings: totalSavings, findings: grouped }
+
 	}
 
 	/**
@@ -185,7 +186,7 @@ export class ClutterScanner extends Scanner {
 	}
 
 	private matchClutterRule(relativePath: string, name: string): ClutterRule | null {
-		const rules = this.rules ?? []
+		const rules = ClutterScanner.rules ?? []
 		for (const rule of rules) {
 			if (!rule.matcher.match(relativePath) && !rule.matcher.match(name)) continue
 			if (rule.exceptions) {

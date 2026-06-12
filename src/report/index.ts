@@ -69,6 +69,7 @@ export class ReportBuilder {
 	}
 
 	addScannerResult(result: ScannerResult): this {
+		if (result.score === 100) return this
 		this.scannerResults.push(result)
 		return this
 	}

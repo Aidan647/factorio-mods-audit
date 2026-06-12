@@ -96,10 +96,10 @@ export class ImagesScanner extends Scanner {
 	readonly weight = 60
 
 	/** Lazy-loaded compiled rules, loaded once on first scan. */
-	private rules: CompiledImageRule[] | null = null
+	static rules: CompiledImageRule[] | null = null
 
 	async scan(modPath: string, sorter: ReportBuilder): Promise<ScannerResult> {
-		if (!this.rules) this.rules = await loadImageRules()
+		if (!ImagesScanner.rules) ImagesScanner.rules = await loadImageRules()
 
 		const rawFindings = await this.walkImages(modPath)
 		const totalSavings = rawFindings.reduce((sum, f) => sum + (f.potentialSavings ?? 0), 0)
@@ -160,7 +160,7 @@ export class ImagesScanner extends Scanner {
 
 	private matchRules(relativePath: string): CompiledImageRule[] {
 		const matched: CompiledImageRule[] = []
-		for (const rule of this.rules ?? []) {
+		for (const rule of ImagesScanner.rules ?? []) {
 			for (const matcher of rule.matchers) {
 				if (matcher.match(relativePath)) {
 					matched.push(rule)

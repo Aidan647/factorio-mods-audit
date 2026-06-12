@@ -11,6 +11,7 @@ import { getSize } from "#/helpers/getFolder"
 import type { Scanner } from "./base"
 import { ScanIndex } from "./scan-index"
 import { defaultConfig, type ScanConfig } from "../config"
+import { DuplicatesScanner } from "./files/duplicates"
 
 export class Orchestrator {
 	private readonly cleanipAwait: Promise<void | string>
@@ -27,7 +28,7 @@ export class Orchestrator {
 	}
 
 	private readonly index: ScanIndex
-	private scanners: Scanner[] = [new MetadataScanner(), new ClutterScanner(), new ImagesScanner()]
+	private scanners: Scanner[] = [new MetadataScanner(), new ClutterScanner(), new ImagesScanner(), new DuplicatesScanner()]
 
 	async loadIndex(): Promise<this> {
 		await this.index.load()

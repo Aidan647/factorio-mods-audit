@@ -7,9 +7,10 @@
 - [x] **Factorio API client** — fetch mod metadata + download zip from `mods.factorio.com/api/mods`
 - [x] **Zip extraction** — unzip mod file in-memory or to temp dir
 - [x] **Malware scan** — check for PE/ELF headers, high-entropy (packed) blobs
-- [ ] **PNG analysis** — compression ratio vs raw pixel data; flag unnecessary chunks (`tEXt`, `iTXt`, `zTXt`)
+- [x] **PNG analysis** — compression ratio vs raw pixel data; flag unnecessary chunks (`tEXt`, `iTXt`, `zTXt`)
 - [x] **Structure analysis** — detect `.git/`, `node_modules/`, `.DS_Store`, `.exe`, `.dll`, oversized files
-- [ ] **Scoring system** — start at 100, deduct per finding
+- [x] **Scoring system** — start at 100, deduct per finding
+- [x] **Duplicate file detection** — flag identical files across mods or within the same mod
 - [ ] **Report output** — text + JSON formats, save to `.audit/reports/`
 - [ ] **CLI arg parsing** — `--mod`, `--json`, `--no-cleanup`, `--output`
 - [ ] **Config file** — JSON5 config for API URL, thresholds, ignore patterns
@@ -20,7 +21,6 @@
 - [ ] **Lua linting** — parse `.lua` files for suspicious patterns (`os.execute`, `require` with raw paths)
 - [ ] **Locale completeness** — check that all locale keys in `info.json` have translations
 - [ ] **Dependency graph** — validate `dependencies` in `info.json` exist and are satisfiable
-- [ ] **Asset duplication** — find identical files across mod versions or within the same mod
 - [ ] **Unused assets** — flag images/sounds not referenced by any Lua prototype
 - [x] **Info.json validation** — check required fields, semver, factorio_version compatibility
 - [ ] **License check** — detect license file, flag missing or restrictive licenses
