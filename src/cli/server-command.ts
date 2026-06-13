@@ -34,10 +34,10 @@ const portalConfig: ModPortalConfig = {
 	cacheExpiryMs: config.cacheExpiryMs,
 }
 const portal = new ModPortal(portalConfig)
+await portal.tokenValidation // Ensure token is valid before accepting connections
 
 const orchestrator = new Orchestrator(portal, config)
 await orchestrator.loadIndex()
-
 const server = createServer({ port, host, portal, orchestrator })
 
 console.log(`WebSocket server listening on ws://${host ?? "localhost"}:${port}/ws`)
