@@ -27,6 +27,7 @@ export type ScannerReport = {
 
 export type AuditReport = {
 	modName: string
+	modNameReadable: string
 	version: string
 	sha1: string
 	timestamp: number
@@ -45,6 +46,7 @@ export class ReportBuilder {
 	readonly scannerResults: ScannerResult[] = []
 	modSize = 0
 	readonly modName: string
+	readonly modNameReadable: string
 	readonly version: string
 	readonly sha1: string
 
@@ -54,6 +56,7 @@ export class ReportBuilder {
 		private readonly reportsDir: string = "./reports",
 	) {
 		this.modName = modInfo.name
+		this.modNameReadable = modInfo.title
 		this.version = release?.version ?? modInfo.latest_release?.version ?? "unknown"
 		this.sha1 = release?.sha1 ?? modInfo.latest_release?.sha1 ?? "unknown"
 	}
@@ -98,6 +101,7 @@ export class ReportBuilder {
 
 		const report: AuditReport = {
 			modName: this.modName,
+			modNameReadable: this.modNameReadable,
 			version: this.version,
 			sha1: this.sha1,
 			timestamp: Date.now(),

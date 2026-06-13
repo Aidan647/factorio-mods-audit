@@ -4,27 +4,7 @@ import { defaultConfig, type ScanConfig } from "../config"
 import { readFile, rm } from "fs/promises"
 import { readdir } from "node:fs/promises"
 import type { AuditReport } from "#/report"
-
-/**
- * Convert bytes to a human-readable string with appropriate units (B, kiB, MiB, GiB).
- * Formats to 4 significant digits (e.g. 123.4kiB, 22.66GiB).
- */
-function bytesToHuman(bytes: number): string {
-	if (bytes < 1024) return `${bytes} B`
-	const units = ["B", "kiB", "MiB", "GiB", "TiB"]
-	const exponent = Math.floor(Math.log(bytes) / Math.log(1024))
-	const value = bytes / Math.pow(1024, exponent)
-	const digits = Math.max(0, 3 - Math.floor(Math.log10(value)))
-	return `${value.toFixed(digits)} ${units[exponent]}`
-}
-function numberToHuman(num: number): string {
-	if (num < 1000) return `${num}`
-	const units = ["", "k", "M", "B", "T"]
-	const exponent = Math.floor(Math.log(num) / Math.log(1000))
-	const value = num / Math.pow(1000, exponent)
-	const digits = Math.max(0, 3 - Math.floor(Math.log10(value)))
-	return `${value.toFixed(digits)}${units[exponent]}`
-}
+import { bytesToHuman, numberToHuman } from "#/helpers/humanify"
 
 export async function runCLI(config: ScanConfig = defaultConfig): Promise<void> {
 	const portalConfig: ModPortalConfig = {

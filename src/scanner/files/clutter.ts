@@ -2,9 +2,10 @@ import { Glob, JSON5 } from "bun"
 import { z } from "zod"
 import path from "node:path"
 import { readFile, readdir } from "node:fs/promises"
-import { Scanner, type ScannerResult } from "../base"
+import type { Scanner, ScannerResult } from "../base"
 import type { Finding, ReportBuilder } from "#/report"
 import { getSize } from "#/helpers/getFolder"
+import type { PathEntry } from "../walkDir"
 
 type ClutterRule = {
 	type: string
@@ -69,19 +70,21 @@ export async function loadClutterRules(): Promise<CompiledClutterRule[]> {
 /**
  * Scanner that finds clutter/development files in the mod directory.
  */
-export class ClutterScanner extends Scanner {
+export class ClutterScanner implements Scanner {
 	readonly id = "clutter"
 	readonly weight = 80
+	readonly findings: Finding[] = []
 
 	/** Lazy-loaded compiled rules, loaded once on first scan. */
 	static rules: CompiledClutterRule[] | null = null
 
-	async scan(modPath: string, sorter: ReportBuilder): Promise<ScannerResult> {
+	async scan(modPath: string, sorter: ReportBuilder): Promise<void> {
 		if (!ClutterScanner.rules) ClutterScanner.rules = await loadClutterRules()
-		const findings = await this.walkDirectory(modPath)
-		const extraFindings = await this.scanParentDir(modPath)
-		findings.push(...extraFindings)
-		const grouped = this.groupFindings(findings)
+		await this.scanParentDir(modPath)
+	}
+
+	report(modPath: string, sorter: ReportBuilder): ScannerResult {
+		const grouped = this.groupFindings()
 		const totalSavings = grouped.reduce((sum, f) => sum + (f.potentialSavings ?? 0), 0)
 
 		const modSize = sorter.modSize || 1 // Avoid division by zero
@@ -99,15 +102,28 @@ export class ClutterScanner extends Scanner {
 		const wasteRatio = Math.min(weightedSavings / modSize, 1)
 		const score = 100 * (1 - wasteRatio ** 0.3)
 		return { id: this.id, score, weight: this.weight, savings: totalSavings, findings: grouped }
-
 	}
+	async scanFile(modPath: string, sorter: ReportBuilder, pathEntry: PathEntry): Promise<boolean> {
+		if (!ClutterScanner.rules) ClutterScanner.rules = await loadClutterRules()
 
+		const matchedRule = this.matchClutterRule(pathEntry.relativePath, path.basename(pathEntry.relativePath))
+		if (matchedRule) {
+			this.findings.push({
+				type: `clutter:${matchedRule.type}`,
+				description: matchedRule.description,
+				severity: matchedRule.severity,
+				paths: [pathEntry.relativePath],
+				potentialSavings: await pathEntry.size().catch(() => 0),
+			})
+			return true
+		}
+		return false
+	}
 	/**
 	 * Scan the parent directory for entries that aren't the mod folder itself.
 	 * These are files/folders accidentally included at the wrong zip level.
 	 */
-	private async scanParentDir(modPath: string): Promise<Finding[]> {
-		const findings: Finding[] = []
+	private async scanParentDir(modPath: string): Promise<void> {
 		const parentDir = path.join(modPath, "..")
 		const modName = path.basename(modPath)
 		const entries = await readdir(parentDir, { withFileTypes: true }).catch(() => [])
@@ -116,7 +132,7 @@ export class ClutterScanner extends Scanner {
 			if (entry.name === modName) continue
 			const entryPath = path.join(parentDir, entry.name)
 			const relativePath = path.relative(modPath, entryPath)
-			findings.push({
+			this.findings.push({
 				type: "clutter:extra-parent-entry",
 				description: `Unexpected file/folder found alongside mod directory in zip: ${entry.name}`,
 				severity: "high",
@@ -124,10 +140,9 @@ export class ClutterScanner extends Scanner {
 				potentialSavings: await getSize(entryPath).catch(() => 0),
 			})
 		}
-		return findings
 	}
 
-	private groupFindings(findings: Finding[]): Finding[] {
+	private groupFindings(): Finding[] {
 		const findingsByType: Record<
 			string,
 			{
@@ -139,7 +154,7 @@ export class ClutterScanner extends Scanner {
 			}
 		> = {}
 
-		for (const finding of findings) {
+		for (const finding of this.findings) {
 			const type = finding.type
 			const fin = findingsByType[type] ?? {
 				type,
@@ -155,34 +170,6 @@ export class ClutterScanner extends Scanner {
 		}
 
 		return Object.values(findingsByType)
-	}
-
-	private async walkDirectory(
-		basePath: string,
-		currentPath: string = ".",
-		findings: Finding[] = [],
-	): Promise<Finding[]> {
-		const pathToScan = path.join(basePath, currentPath)
-		const entries = await readdir(pathToScan, { withFileTypes: true }).catch(() => [])
-		for (const entry of entries) {
-			const entryPath = path.join(pathToScan, entry.name)
-			const relativePath = path.relative(basePath, entryPath)
-			const matchedRule = this.matchClutterRule(relativePath, entry.name)
-			if (matchedRule) {
-				findings.push({
-					type: `clutter:${matchedRule.type}`,
-					description: matchedRule.description,
-					severity: matchedRule.severity,
-					paths: [relativePath],
-					potentialSavings: await getSize(entryPath),
-				})
-				continue
-			}
-			if (entry.isDirectory()) {
-				await this.walkDirectory(basePath, relativePath, findings)
-			}
-		}
-		return findings
 	}
 
 	private matchClutterRule(relativePath: string, name: string): ClutterRule | null {

@@ -1,7 +1,8 @@
 import { readFile } from "node:fs/promises"
 import path from "node:path"
 import sharp from "sharp"
-import type { CompiledImageRule } from "./images"
+import type { CompiledImageRule } from "../images"
+import type { FileEntry } from "#/scanner/walkDir"
 
 export type ImageFinding = {
 	type: string
@@ -14,8 +15,8 @@ export type ImageFinding = {
 /**
  * Load a PNG file and extract image info.
  */
-export async function loadImage(absolutePath: string, relativePath: string): Promise<[sharp.Sharp, number] | null> {
-	const buffer = await readFile(absolutePath).catch(() => null)
+export async function loadImage(fileEntry: FileEntry): Promise<[sharp.Sharp, number] | null> {
+	const buffer = await fileEntry.read().catch(() => null)
 	if (!buffer) return null
 
 	const img = sharp(buffer)
@@ -50,8 +51,7 @@ export async function checkImage(
 	size: number,
 	imagePath: string,
 	rule: CompiledImageRule,
-): Promise<ImageFinding[]> {
-	const findings: ImageFinding[] = []
+): Promise<ImageFinding | null> {
 	const metadata = await image.metadata()
 	const w = metadata.width ?? 0
 	const h = metadata.height ?? 0
@@ -62,31 +62,30 @@ export async function checkImage(
 		if (w > maxWidth || h > maxHeight) {
 			const { width: optimalWidth, height: optimalHeight } = rule.optimalSize || rule.maxSize
 			const potentialSavings = await computeResizeSavings({ img: image, fileSize: size }, maxWidth, maxHeight)
-			if (potentialSavings <= 0) return findings // image is large but higly compressed
-			findings.push({
+			if (potentialSavings <= 0) return null
+			return {
 				type: `images:${rule.type}`,
 				description: `Image dimensions${rule.optimalSize ? " higly" : ""} exceed optimal dimensions are ${optimalWidth}x${optimalHeight}.`,
 				severity: rule.severity,
 				path: imagePath,
 				potentialSavings,
-			})
-			return findings
+			}
 		}
 	}
 
-	const potentialSavings = (await computeResizeSavings({ img: image, fileSize: size }))
+	const potentialSavings = await computeResizeSavings({ img: image, fileSize: size })
 	// add finding only if it has potential savings more than 5% + 100 bytes of the original size to avoid noise
 	if (potentialSavings > size * 0.05 + 100) {
-		findings.push({
+		return {
 			type: `images:compression`,
 			description: `Image has potential for better compression.`,
 			severity: "low",
 			path: imagePath,
 			potentialSavings,
-		})
+		}
 	}
 
-	return findings
+	return null
 }
 
 async function computeResizeSavings(imageInfo: { img: sharp.Sharp; fileSize: number }): Promise<number>

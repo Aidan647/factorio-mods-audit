@@ -1,12 +1,13 @@
 import { Glob } from "bun"
 import path from "node:path"
 import { readdir, readFile } from "node:fs/promises"
-import { Scanner, type ScannerResult } from "../base"
+import type { Scanner, ScannerResult } from "../base"
 import type { Finding, ReportBuilder } from "#/report"
 import { getSize } from "#/helpers/getFolder"
 import { ClutterScanner, loadClutterRules } from "./clutter"
+import type { FileEntry, PathEntry } from "../walkDir"
 
-type FileEntry = {
+type DublicateEntry = {
 	relativePath: string
 	absolutePath: string
 	size: number
@@ -18,22 +19,17 @@ type FileEntry = {
  * Files matching clutter rules are ignored since they are expected
  * to be non-essential and their duplication is already reported.
  */
-export class DuplicatesScanner extends Scanner {
+export class DuplicatesScanner implements Scanner {
 	readonly id = "duplicates"
 	readonly weight = 70
+	readonly findings: Finding[] = []
+	readonly duplicateGroups: Map<string, DublicateEntry[]> = new Map()
 
-	async scan(modPath: string, sorter: ReportBuilder): Promise<ScannerResult> {
-		// Ensure clutter rules are loaded so we can skip clutter files
-		if (!ClutterScanner.rules) ClutterScanner.rules = await loadClutterRules()
-
-		const files = await this.collectFiles(modPath)
-		const hashMap = await this.hashFiles(files)
-		const duplicateGroups = this.findDuplicates(hashMap)
-
+	report(modPath: string, sorter: ReportBuilder): ScannerResult {
 		const findings: Finding[] = []
 		let totalSavings = 0
 
-		for (const group of duplicateGroups) {
+		for (const group of this.findDuplicates(this.duplicateGroups)) {
 			const groupSavings = (group.length - 1) * (group[0]?.size ?? 0)
 			totalSavings += groupSavings
 
@@ -50,38 +46,17 @@ export class DuplicatesScanner extends Scanner {
 		findings.sort((a, b) => (b.potentialSavings ?? 0) - (a.potentialSavings ?? 0))
 		const modSize = sorter.modSize || 1
 		const wasteRatio = Math.min(totalSavings / modSize, 1)
-		const score = 100 * (1 - wasteRatio ** 0.25)
+		const score = 100 * (1 - wasteRatio ** 0.3)
 
 		return { id: this.id, score, weight: this.weight, savings: totalSavings, findings }
 	}
 
-	/**
-	 * Recursively collect all files, skipping those that match clutter rules.
-	 */
-	private async collectFiles(modPath: string): Promise<FileEntry[]> {
-		const files: FileEntry[] = []
-		await this.walkDir(modPath, ".", files)
-		return files
-	}
+	async scanFile(modPath: string, sorter: ReportBuilder, fileEntry: PathEntry): Promise<void> {
+		if (fileEntry.isDirectory) return
+		if (!ClutterScanner.rules) ClutterScanner.rules = await loadClutterRules()
+		if (this.isClutter(fileEntry.relativePath, path.basename(fileEntry.relativePath))) return
 
-	private async walkDir(basePath: string, currentPath: string, files: FileEntry[]): Promise<void> {
-		const pathToScan = path.join(basePath, currentPath)
-		const entries = await readdir(pathToScan, { withFileTypes: true }).catch(() => [])
-
-		for (const entry of entries) {
-			const entryPath = path.join(pathToScan, entry.name)
-			const relativePath = path.relative(basePath, entryPath)
-
-			if (entry.isDirectory()) {
-				await this.walkDir(basePath, relativePath, files)
-				continue
-			}
-
-			if (this.isClutter(relativePath, entry.name)) continue
-
-			const size = await getSize(entryPath).catch(() => 0)
-			files.push({ relativePath, absolutePath: entryPath, size })
-		}
+		await this.hashFile(fileEntry)
 	}
 
 	/**
@@ -106,32 +81,25 @@ export class DuplicatesScanner extends Scanner {
 		return false
 	}
 
-	/**
-	 * Hash all files by content and group by hash.
-	 */
-	private async hashFiles(files: FileEntry[]): Promise<Map<string, FileEntry[]>> {
-		const hashMap = new Map<string, FileEntry[]>()
-
-		for (const file of files) {
-			const buffer = await readFile(file.absolutePath).catch(() => null)
-			if (!buffer) continue
-			const hash = Bun.hash(buffer).toString(16)
-			const existing = hashMap.get(hash)
-			if (existing) {
-				existing.push(file)
-			} else {
-				hashMap.set(hash, [file])
-			}
+	private async hashFile(file: FileEntry): Promise<void> {
+		const buffer = await file.read().catch(() => null)
+		if (!buffer) return
+		const hash = Bun.hash(buffer).toString(16)
+		const existing = this.duplicateGroups.get(hash)
+		const entry: DublicateEntry = {
+			relativePath: file.relativePath,
+			absolutePath: file.absolutePath,
+			size: buffer.length,
 		}
-
-		return hashMap
+		if (existing) existing.push(entry)
+		else this.duplicateGroups.set(hash, [entry])
 	}
 
 	/**
 	 * Extract groups with more than one file sharing the same hash.
 	 */
-	private findDuplicates(hashMap: Map<string, FileEntry[]>): FileEntry[][] {
-		const groups: FileEntry[][] = []
+	private findDuplicates(hashMap: Map<string, DublicateEntry[]>): DublicateEntry[][] {
+		const groups: DublicateEntry[][] = []
 		for (const entries of hashMap.values()) {
 			if (entries.length > 1) groups.push(entries)
 		}

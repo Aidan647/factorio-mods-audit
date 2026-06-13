@@ -2,9 +2,10 @@ import { Glob, JSON5 } from "bun"
 import { z } from "zod"
 import path from "node:path"
 import { readdir, readFile } from "node:fs/promises"
-import { Scanner, type ScannerResult } from "../base"
+import type { Scanner, ScannerResult } from "../base"
 import type { Finding, ReportBuilder } from "#/report"
-import { checkImage, loadImage, type ImageFinding } from "./image-checks"
+import { checkImage, loadImage, type ImageFinding } from "./helpers/image-checks"
+import type { FileEntry, PathEntry } from "../walkDir"
 
 type SizeInput = number | { width: number; height: number }
 
@@ -82,31 +83,24 @@ async function loadImageRules(): Promise<CompiledImageRule[]> {
 	return compiled
 }
 
-/**
- * Scanner that validates image dimensions, paths, and compression.
- *
- * Checks per rule:
- *  - Images exceeding optimal dimensions (warning)
- *  - Images exceeding max dimensions (finding with resize+recompress savings estimate)
- *  - Mipmap levels exceeding maxMipmaps
- *  - Non-power-of-2 dimensions (mipmap-unfriendly)
- */
-export class ImagesScanner extends Scanner {
+export class ImagesScanner implements Scanner {
 	readonly id = "images"
 	readonly weight = 60
+	readonly findings: Finding[] = []
+	readonly rawFindings: ImageFinding[] = []
 
 	/** Lazy-loaded compiled rules, loaded once on first scan. */
 	static rules: CompiledImageRule[] | null = null
 
-	async scan(modPath: string, sorter: ReportBuilder): Promise<ScannerResult> {
+	async scan(modPath: string, sorter: ReportBuilder): Promise<void> {
 		if (!ImagesScanner.rules) ImagesScanner.rules = await loadImageRules()
+	}
 
-		const rawFindings = await this.walkImages(modPath)
-		const totalSavings = rawFindings.reduce((sum, f) => sum + (f.potentialSavings ?? 0), 0)
-
+	report(modPath: string, sorter: ReportBuilder): ScannerResult {
+		const totalSavings = this.rawFindings.reduce((sum, f) => sum + (f.potentialSavings ?? 0), 0)
 		const modSize = sorter.modSize || 1
 		const savings = { low: 0, medium: 0, high: 0 }
-		for (const finding of rawFindings) {
+		for (const finding of this.rawFindings) {
 			const sev = finding.severity ?? "medium"
 			savings[sev] += finding.potentialSavings ?? 0
 		}
@@ -119,42 +113,25 @@ export class ImagesScanner extends Scanner {
 			score,
 			weight: this.weight,
 			savings: totalSavings,
-			findings: this.groupFindings(rawFindings),
+			findings: this.groupFindings(this.rawFindings),
 		}
 	}
 
-	private async walkImages(basePath: string): Promise<ImageFinding[]> {
-		const findings: ImageFinding[] = []
-		await this.walkDir(basePath, ".", findings)
-		return findings
-	}
-
-	private async walkDir(basePath: string, currentPath: string, findings: ImageFinding[]): Promise<void> {
-		const pathToScan = path.join(basePath, currentPath)
-		const entries = await readdir(pathToScan, { withFileTypes: true }).catch(() => [])
-
-		for (const entry of entries) {
-			const entryPath = path.join(pathToScan, entry.name)
-			const relativePath = path.relative(basePath, entryPath)
-
-			if (entry.isDirectory()) {
-				await this.walkDir(basePath, relativePath, findings)
-				continue
-			}
-
-			if (!entry.name.endsWith(".png")) continue
-
-			const info = await loadImage(entryPath, relativePath)
-			if (!info) continue
-			const [img, fileSize] = info
-			// Find matching rules for this file
-			const matchingRules = this.matchRules(relativePath)
-			for (const rule of matchingRules) {
-				// use globs to check if this file matches the rule's patterns
-				if (!rule.matchers.some((m) => m.match(relativePath))) continue
-				findings.push(...(await checkImage(img, fileSize, relativePath, rule)))
-				break
-			}
+	async scanFile(modPath: string, sorter: ReportBuilder, fileEntry: PathEntry): Promise<void> {
+		if (fileEntry.isDirectory) return
+		if (!fileEntry.relativePath.endsWith(".png")) return
+		if (!ImagesScanner.rules) ImagesScanner.rules = await loadImageRules()
+		const info = await loadImage(fileEntry)
+		if (!info) return
+		const [img, fileSize] = info
+		// Find matching rules for this file
+		const matchingRules = this.matchRules(fileEntry.relativePath)
+		for (const rule of matchingRules) {
+			// use globs to check if this file matches the rule's patterns
+			if (!rule.matchers.some((m) => m.match(fileEntry.relativePath))) continue
+			const finding = await checkImage(img, fileSize, fileEntry.relativePath, rule)
+			if (finding) this.rawFindings.push(finding)
+			break
 		}
 	}
 

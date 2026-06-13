@@ -1,7 +1,7 @@
 import z from "zod"
 import path from "node:path"
 import { readdir, readFile } from "node:fs/promises"
-import { Scanner, type ScannerResult } from "./base"
+import type { Scanner, ScannerResult } from "./base"
 import type { Finding, ReportBuilder } from "../report"
 
 const versionFormat = z.stringFormat("versionFormat", (value) => {
@@ -130,36 +130,51 @@ async function isValidModFolder(
 /**
  * Scanner that validates info.json schema, dependencies, and metadata quality.
  */
-export class MetadataScanner extends Scanner {
+export class MetadataScanner implements Scanner {
 	readonly id = "metadata"
 	readonly weight = 20
+	readonly findings: Finding[] = []
+	private data: InfoJson | null = null
 
-	async scan(modPath: string, sorter: ReportBuilder): Promise<ScannerResult> {
-		const findings: Finding[] = []
+	async scan(modPath: string, sorter: ReportBuilder): Promise<void> {
 		const infoJsonPath = path.join(modPath, "info.json")
-		const data = JSON.parse((await readFile(infoJsonPath, "utf-8").catch(() => "{}")) || "{}")
-		const result = infoJsonSchema.safeParse(data)
+		this.data = JSON.parse((await readFile(infoJsonPath, "utf-8").catch(() => "{}")) || "{}")
+	}
+	report(modPath: string, sorter: ReportBuilder): ScannerResult {
+		if (!this.data) {
+			this.findings.push({
+				type: "MissingInfoJson",
+				description: "The mod does not contain an info.json file.",
+				paths: [path.join(modPath, "info.json")],
+			})
+			return { id: this.id, score: 0, weight: this.weight, savings: 0, findings: this.findings }
+		}
+		const result = infoJsonSchema.safeParse(this.data)
 
 		if (!result.success) {
-			findings.push({
+			this.findings.push({
 				type: "InvalidInfoJson",
 				description: z.prettifyError(result.error),
 			})
-			return { id: this.id, score: 0, weight: this.weight, savings: 0, findings }
+			return { id: this.id, score: 0, weight: this.weight, savings: 0, findings: this.findings }
 		}
-
+		const invalidDeps: string[] = []
 		for (const dep of result.data.dependencies) {
 			const regex = /^(?:(?:!|\?|\(\?\)|~) ?)?(?:[0-9a-zA-Z\-_ ]+)(?: (?:<=|>=|=|<|>) ?\d+(?:\.\d+(?:\.\d+)?)?)?$/
 			if (!regex.test(dep)) {
-				findings.push({
-					type: "InvalidDependency",
-					description: `The mod has an invalid dependency format: "${dep}".`,
-				})
+				invalidDeps.push(dep)
 			}
+		}
+		if (invalidDeps.length > 0) {
+			this.findings.push({
+				type: "InvalidDependencies",
+				description: "The info.json contains dependencies that do not follow the expected format.",
+				paths: invalidDeps,
+			})
 		}
 
 		// Score: start at 100, deduct per finding
-		const score = Math.max(0, 100 - findings.length * 25)
-		return { id: this.id, score, weight: this.weight, savings: 0, findings }
+		const score = Math.max(0, 100 - this.findings.length * 25)
+		return { id: this.id, score, weight: this.weight, savings: 0, findings: this.findings }
 	}
 }

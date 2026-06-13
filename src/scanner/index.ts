@@ -8,10 +8,11 @@ import { scanFile, Verdict } from "../helpers/scanfile"
 import { findModFolder, MetadataScanner } from "./metadata"
 import { ClutterScanner, ImagesScanner } from "./files"
 import { getSize } from "#/helpers/getFolder"
-import type { Scanner } from "./base"
+import type { Scanner, ScannerFactory } from "./base"
 import { ScanIndex } from "./scan-index"
 import { defaultConfig, type ScanConfig } from "../config"
 import { DuplicatesScanner } from "./files/duplicates"
+import walkDir from "./walkDir"
 
 export class Orchestrator {
 	private readonly cleanipAwait: Promise<void | string>
@@ -28,7 +29,7 @@ export class Orchestrator {
 	}
 
 	private readonly index: ScanIndex
-	private scanners: Scanner[] = [new MetadataScanner(), new ClutterScanner(), new ImagesScanner(), new DuplicatesScanner()]
+	private scanners: ScannerFactory[] = [ClutterScanner, MetadataScanner, ImagesScanner, DuplicatesScanner]
 
 	async loadIndex(): Promise<this> {
 		await this.index.load()
@@ -45,13 +46,17 @@ export class Orchestrator {
 		const modPath = await this.preflight(mod.latest_release, sorter)
 		if (!modPath) return this.cleanup(sorter, true)
 
+		const scanners = this.scanners.map((Factory) => new Factory())
+
 		// Measure mod size
 		await getSize(path.join(modPath, "..")) // gets total size of the unzipped folder, which is more relevant for size
 			.then((size) => sorter.setModSize(size))
 			.catch(() => {})
 
 		// Stage 2 & 3: Orchestrator runs registered scanners
-		await this.runScanners(modPath, sorter)
+		await this.runScanners(modPath, sorter, scanners)
+
+		this.generateReport(modPath, sorter, scanners)
 
 		return this.cleanup(sorter, true)
 	}
@@ -131,19 +136,50 @@ export class Orchestrator {
 		return folderResult.folderPath
 	}
 
+	private addError(sorter: ReportBuilder, err: unknown, context?: string) {
+		if (err instanceof Error) {
+			return sorter.addError(err)
+		}
+		sorter.addError(new Error(`Unknown error${context ? ` in ${context}` : ""}: ${String(err)}`))
+	}
+
 	/**
-	 * Stage 2 & 3: Run all registered scanners and collect results.
+	 * Stage 2: Run all registered scanners.
 	 */
-	private async runScanners(modPath: string, sorter: ReportBuilder): Promise<void> {
-		for (const scanner of this.scanners) {
-			const result = await scanner.scan(modPath, sorter).catch((err: Error) => {
-				sorter.addError(err)
-				return null
-			})
-			if (result) {
-				result.score = Math.max(0, Math.min(100, Math.round(10 * result.score) / 10))
-				sorter.addScannerResult(result)
+	private async runScanners(modPath: string, sorter: ReportBuilder, scanners: Scanner[]): Promise<void> {
+		for (const scanner of scanners) {
+			await scanner.scan?.(modPath, sorter).catch((err) => this.addError(sorter, err, `scanner ${scanner.id}`))
+		}
+		const generator = walkDir(modPath)
+		let next = await generator.next()
+		while (!next.done) {
+			const pathEntry = next.value
+
+			let skip = false
+			for (const scanner of scanners) {
+				const result = await scanner.scanFile?.(modPath, sorter, pathEntry).catch((err) => {
+					this.addError(
+						sorter,
+						err,
+						`scanner ${scanner.id} on file ${pathEntry.relativePath} (${sorter.modName} ${sorter.version})`,
+					)
+				})
+				if (result === true) {
+					skip = true
+					break
+				}
 			}
+			if (!pathEntry.isDirectory) pathEntry.unread()
+			next = await generator.next(skip)
+		}
+	}
+
+	// Stage 3: Cleanup temp files and save report
+	generateReport(modPath: string, sorter: ReportBuilder, scanners: Scanner[]): void {
+		for (const scanner of scanners) {
+			const result = scanner.report(modPath, sorter)
+			result.score = Math.max(0, Math.min(100, result.score))
+			sorter.addScannerResult(result)
 		}
 	}
 

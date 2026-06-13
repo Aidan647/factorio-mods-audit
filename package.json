@@ -8,6 +8,7 @@
   },
   "private": true,
   "scripts": {
+    "format-report": "bun run tools/format-report.ts",
     "start": "bun run src/index.ts",
     "test": "bun test",
     "typecheck": "bunx tsc --noEmit",

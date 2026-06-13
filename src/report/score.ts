@@ -5,7 +5,7 @@ export interface ScoreItem {
 
 export function calculateScore(
 	items: ScoreItem[],
-	minShift = 0.01, // weight=100 // critical
+	minShift = 0, // weight=100 // critical
 	maxShift = 0.5, // weight=0
 ): number {
 	let result = 1
@@ -14,7 +14,8 @@ export function calculateScore(
 		const score = Math.max(0, Math.min(100, item.score))
 		const weight = Math.max(0, Math.min(100, item.weight))
 
-		const shift = maxShift - (maxShift - minShift) * (weight / 100)
+		const normalized = Math.log(1 + weight) / Math.log(101)
+		const shift = maxShift - (maxShift - minShift) * normalized
 
 		const deduction = (1 - score / 100) * (1 - shift)
 
