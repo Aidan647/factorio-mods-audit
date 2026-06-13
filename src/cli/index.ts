@@ -45,10 +45,6 @@ export async function scanSingleMod(
 
 	console.log(`Scanning ${modInfo.title} v${latestRelease.version}...`)
 	const report = await scanner.scanMod(modListItem)
-	if (!report) {
-		console.log("Skipping — already scanned recently")
-		return null
-	}
 
 	switch (format) {
 		case "txt":

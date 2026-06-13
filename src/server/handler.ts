@@ -58,7 +58,11 @@ export class MessageHandler {
 		}
 
 		if (req.jsonrpc !== "2.0" || typeof req.method !== "string") {
-			this.send(ws, { jsonrpc: "2.0", error: invalidParams("Missing jsonrpc or method field"), id: req.id ?? null })
+			this.send(ws, {
+				jsonrpc: "2.0",
+				error: invalidParams("Missing jsonrpc or method field"),
+				id: req.id ?? null,
+			})
 			return
 		}
 
@@ -89,16 +93,16 @@ export class MessageHandler {
 		this.log(`scan request: ${params.modName}@${params.version}`)
 
 		// Queue the scan — runs serially with other scans
-		const result = await this.queue.enqueue(async (): Promise<
-			{ kind: "data"; data: ScanResult } | { kind: "error"; error: Error }
-		> => {
-			this.log(`starting scan: ${params.modName}@${params.version}`)
-			try {
-				return await this.runScan(params)
-			} catch (err) {
-				return { kind: "error", error: err instanceof Error ? err : new Error(String(err)) }
-			}
-		})
+		const result = await this.queue.enqueue(
+			async (): Promise<{ kind: "data"; data: ScanResult } | { kind: "error"; error: Error }> => {
+				this.log(`starting scan: ${params.modName}@${params.version}`)
+				try {
+					return await this.runScan(params)
+				} catch (err) {
+					return { kind: "error", error: err instanceof Error ? err : new Error(String(err)) }
+				}
+			},
+		)
 
 		if (result.kind === "error") {
 			this.log(`scan failed: ${params.modName}@${params.version} — ${result.error.message}`)
@@ -131,8 +135,13 @@ export class MessageHandler {
 			latest_release: release,
 		}
 
-		const report = await this.deps.orchestrator.scanMod(modListItem)
-		if (!report) return { kind: "error", error: new Error("Scan returned no report") }
+		this.log(`fetched mod info: ${modInfo.name}@${release.version} (SHA1: ${release.sha1})`)
+		const report = await this.deps.orchestrator.scanMod(modListItem).catch((err) => {
+			return String(err.message)
+		})
+		if (typeof report === "string") {
+			return { kind: "error", error: new Error(`Mod scan error: ${report}`) }
+		}
 
 		return { kind: "data", data: { report, modInfo: modListItem } }
 	}

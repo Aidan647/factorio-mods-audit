@@ -52,9 +52,9 @@ export class Orchestrator {
 		return this
 	}
 
-	async scanMod(mod: ModListItem): Promise<AuditReport | null> {
+	async scanMod(mod: ModListItem): Promise<AuditReport> {
 		if (!mod.latest_release) throw new Error("No latest release found for mod: " + mod.name)
-		const cached = this.loadCachedReport(mod.latest_release.sha1)
+		const cached = await this.loadCachedReport(mod.latest_release.sha1)
 		if (cached) return cached
 
 		const sorter = new ReportBuilder(mod, mod.latest_release, this.cfg.reportsDir)
@@ -62,9 +62,9 @@ export class Orchestrator {
 		// Stage 1: Preflight — download, unpack, virus scan, find mod folder
 		const modPath = await this.preflight(mod.latest_release, sorter)
 		if (!modPath) {
-			await this.save(sorter)
+			const report = await this.save(sorter)
 			await this.cleanup(sorter)
-			return null
+			return report
 		}
 
 		const scanners = this.scanners.map((Factory) => new Factory())
@@ -239,7 +239,7 @@ export class Orchestrator {
 		)
 		if (reportPath) {
 			this.reportCache.set(report.sha1, report)
-			if (!report.errors || report.errors.length !== 0) {
+			if (!report.errors || report.errors.length === 0) {
 				this.index.set(report.sha1, { reportPath, scannedAt: new Date().toISOString() })
 				await this.index.save().catch((err) => console.log("Failed to save scan index:", err))
 			}
