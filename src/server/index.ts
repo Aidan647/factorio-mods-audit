@@ -27,11 +27,13 @@ export function createServer(opts: WebSocketServerOptions) {
 				const raw = typeof data === "string" ? data : new TextDecoder().decode(data)
 				await handler.handle(raw, ws)
 			},
-			open(_ws) {
-				// Connection opened — no action needed
+			open(ws) {
+				if (process.env.WS_LOG === "1" || process.env.WS_LOG?.toLowerCase() === "true")
+					console.log(`[ws] client connected (${ws.remoteAddress})`)
 			},
-			close(_ws) {
-				// Connection closed — no cleanup needed
+			close(ws) {
+				if (process.env.WS_LOG === "1" || process.env.WS_LOG?.toLowerCase() === "true")
+					console.log(`[ws] client disconnected (${ws.remoteAddress})`)
 			},
 			drain(_ws) {
 				// Backpressure — no action needed

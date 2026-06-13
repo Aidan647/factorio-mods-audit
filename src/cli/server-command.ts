@@ -12,20 +12,20 @@ import Orchestrator from "../scanner"
 import { loadConfig, type ScanConfig } from "../config"
 import { createServer } from "../server"
 
+const config = loadConfig()
+
 const args = process.argv.slice(2)
 
 const portIndex = args.indexOf("--port")
-const port = portIndex !== -1 ? Number(args[portIndex + 1]) : 8080
+const port = portIndex !== -1 ? Number(args[portIndex + 1]) : config.serverPort
 
 const hostIndex = args.indexOf("--host")
-const host = hostIndex !== -1 ? args[hostIndex + 1] : undefined
+const host = hostIndex !== -1 ? args[hostIndex + 1] : config.serverHost
 
 if (Number.isNaN(port)) {
 	console.error("Usage: bun serve [--port <number>] [--host <string>]")
 	process.exit(1)
 }
-
-const config = loadConfig()
 
 const portalConfig: ModPortalConfig = {
 	username: process.env.FACTORIO_USERNAME || process.env.USERNAME || "username",

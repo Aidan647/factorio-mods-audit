@@ -40,6 +40,11 @@ export type HandlerDeps = {
 
 export class MessageHandler {
 	private readonly queue = new ScanQueue()
+	private readonly logEnabled = process.env.WS_LOG === "1" || process.env.WS_LOG?.toLowerCase() === "true"
+
+	private readonly log = (msg: string) => {
+		if (this.logEnabled) console.log(`[ws] ${msg}`)
+	}
 
 	constructor(private readonly deps: HandlerDeps) {}
 
@@ -81,11 +86,13 @@ export class MessageHandler {
 		}
 
 		const params = parsed.data as ScanParams
+		this.log(`scan request: ${params.modName}@${params.version}`)
 
 		// Queue the scan — runs serially with other scans
 		const result = await this.queue.enqueue(async (): Promise<
 			{ kind: "data"; data: ScanResult } | { kind: "error"; error: Error }
 		> => {
+			this.log(`starting scan: ${params.modName}@${params.version}`)
 			try {
 				return await this.runScan(params)
 			} catch (err) {
@@ -94,10 +101,12 @@ export class MessageHandler {
 		})
 
 		if (result.kind === "error") {
+			this.log(`scan failed: ${params.modName}@${params.version} — ${result.error.message}`)
 			this.send(ws, { jsonrpc: "2.0", error: internalError(result.error), id: req.id })
 			return
 		}
 
+		this.log(`scan complete: ${params.modName}@${params.version}`)
 		this.send<"scan">(ws, { jsonrpc: "2.0", result: result.data, id: req.id })
 	}
 
