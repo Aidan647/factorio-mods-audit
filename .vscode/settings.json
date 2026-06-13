@@ -51,6 +51,10 @@
 		"/^bun typecheck 2>&1 && bun test 2>&1$/": {
 			"approve": true,
 			"matchCommandLine": true
+		},
+		"/^bun test changelog 2>&1$/": {
+			"approve": true,
+			"matchCommandLine": true
 		}
 	},
 	"js/ts.tsdk.path": "node_modules/typescript/lib",

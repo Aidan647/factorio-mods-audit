@@ -12,11 +12,17 @@ export type ScannerResult = {
 	savings: number
 	/** Findings discovered by this scanner */
 	findings: Finding[]
+	minimumImpact?: number
 }
 
 export interface Scanner {
 	readonly id: string
 	readonly weight: number
+	/**
+	 * Optional minimum impact threshold (0-100) for this scanner.
+	 * scanner score will be set to that if score is below it, effectively capping the maximum penalty. This is useful for scanners that are known to produce some false positives or low-impact findings, to prevent them from disproportionately affecting the overall score.
+	 */
+	readonly minimumImpact?: number
 	readonly findings: Finding[]
 
 	scan?(modPath: string, sorter: ReportBuilder): Promise<void>

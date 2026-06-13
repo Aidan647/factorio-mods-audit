@@ -77,11 +77,11 @@ export async function runCLI(config: ScanConfig = defaultConfig): Promise<void> 
 		}
 		// if (findingsCount > 5) break
 		// if (report.score < 70) break
+		let stop = false
 		for (const sr of report.scanners) {
-			for (const finding of sr.findings) {
-				if (finding.type === "clutter:extra-parent-entry") break
-			}
+			if (sr.id === "changelog") stop = true
 		}
+		if (stop)  break
 
 		console.log()
 	}

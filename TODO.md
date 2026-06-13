@@ -11,7 +11,7 @@
 - [x] **Structure analysis** — detect `.git/`, `node_modules/`, `.DS_Store`, `.exe`, `.dll`, oversized files
 - [x] **Scoring system** — start at 100, deduct per finding
 - [x] **Duplicate file detection** — flag identical files across mods or within the same mod
-- [ ] **Report output** — text + JSON formats, save to `.audit/reports/`
+- [x] **Report output** — text + JSON formats, save to `.audit/reports/`
 - [ ] **CLI arg parsing** — `--mod`, `--json`, `--no-cleanup`, `--output`
 - [ ] **Config file** — JSON5 config for API URL, thresholds, ignore patterns
 - [ ] **README** — project overview, usage, architecture
@@ -24,7 +24,7 @@
 - [ ] **Unused assets** — flag images/sounds not referenced by any Lua prototype
 - [x] **Info.json validation** — check required fields, semver, factorio_version compatibility
 - [ ] **License check** — detect license file, flag missing or restrictive licenses
-- [ ] **Changelog quality** — check that `changelog.txt` exists and has meaningful entries
+- [x] **Changelog quality** — check that `changelog.txt` exists and has meaningful entries
 - [ ] **Migration scripts** — validate `migrations/` against current version
 - [ ] **Thumbnail check** — verify `thumbnail.png` exists and is reasonable size
 

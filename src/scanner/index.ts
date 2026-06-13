@@ -12,6 +12,7 @@ import type { Scanner, ScannerFactory } from "./base"
 import { ScanIndex } from "./scan-index"
 import { defaultConfig, type ScanConfig } from "../config"
 import { DuplicatesScanner } from "./files/duplicates"
+import { ChangelogScanner } from "./changelog"
 import walkDir from "./walkDir"
 
 export class Orchestrator {
@@ -29,7 +30,13 @@ export class Orchestrator {
 	}
 
 	private readonly index: ScanIndex
-	private scanners: ScannerFactory[] = [ClutterScanner, MetadataScanner, ImagesScanner, DuplicatesScanner]
+	private scanners: ScannerFactory[] = [
+		ClutterScanner,
+		MetadataScanner,
+		ImagesScanner,
+		DuplicatesScanner,
+		ChangelogScanner,
+	]
 
 	async loadIndex(): Promise<this> {
 		await this.index.load()

@@ -10,8 +10,6 @@ export async function saveReportToDisk(
 ): Promise<void> {
 	const scoreDir = report.errors && report.errors.length > 0 ? "errored" : report.score < 100 ? "found" : "clean"
 
-	const basePath = `${reportsDir}/${scoreDir}/${report.modName}-${report.version}`
-
 	const promises = []
 
 	// JSON
