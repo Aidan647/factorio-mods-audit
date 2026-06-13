@@ -1,0 +1,14 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      target: release
+    working_dir: /app
+    volumes:
+      - ./data:/app/data
+    ports:
+      - "3000:3000"
+    environment:
+      - FACTORIO_USERNAME=
+      - FACTORIO_TOKEN=

@@ -17,5 +17,4 @@ LICENSE
 .prettierrc.json5
 test
 TODO.md
-tsconfig.json
 coverage*

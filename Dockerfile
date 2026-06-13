@@ -1,6 +1,6 @@
 # use the official Bun image
 # see all versions at https://hub.docker.com/r/oven/bun/tags
-FROM oven/bun:1 AS base
+FROM oven/bun:alpine AS base
 WORKDIR /app
 
 # install dependencies into temp directory
@@ -29,4 +29,4 @@ ENV CACHE_EXPIRY_MS=86400000
 # run the app
 USER bun
 EXPOSE 3000/tcp
-ENTRYPOINT [ "bun", "run", "serve", "--port", "3000" ]
+ENTRYPOINT [ "bun", "run", "serve", "--port", "3000", "--host", "0.0.0.0" ]
