@@ -38,6 +38,10 @@ export class ScanIndex {
 		this.data[sha1] = entry
 	}
 
+	delete(sha1: string): void {
+		delete this.data[sha1]
+	}
+
 	async save(): Promise<void> {
 		await fs.mkdir(path.dirname(this.indexPath), { recursive: true })
 		await fs.writeFile(this.indexPath, JSON.stringify(this.data))

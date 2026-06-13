@@ -89,7 +89,10 @@ export class Orchestrator {
 	/** Try to load a previously-saved report from memory cache or disk. */
 	private async loadCachedReport(sha1: string): Promise<AuditReport | null> {
 		const cached = this.reportCache.get(sha1)
-		if (cached) return cached
+		if (cached) {
+			if (cached.errors && cached.errors.length > 0) return null
+			return cached
+		}
 
 		const entry = this.index.get(sha1)
 		if (!entry) return null
@@ -99,6 +102,10 @@ export class Orchestrator {
 			.then((raw) => {
 				const report = JSON.parse(raw) as AuditReport
 				if (report.scannerVersion !== SCANNER_VERSION) return null
+				if (report.errors && report.errors.length > 0) {
+					this.index.delete(sha1)
+					return null
+				}
 				this.reportCache.set(sha1, report)
 				return report
 			})
@@ -236,9 +243,11 @@ export class Orchestrator {
 			console.log("Failed to save report to disk:", err),
 		)
 		if (reportPath) {
-			this.index.set(report.sha1, { reportPath, scannedAt: new Date().toISOString() })
 			this.reportCache.set(report.sha1, report)
-			await this.index.save().catch((err) => console.log("Failed to save scan index:", err))
+			if (!report.errors || report.errors.length !== 0) {
+				this.index.set(report.sha1, { reportPath, scannedAt: new Date().toISOString() })
+				await this.index.save().catch((err) => console.log("Failed to save scan index:", err))
+			}
 		}
 		return report
 	}

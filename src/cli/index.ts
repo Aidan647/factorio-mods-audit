@@ -18,6 +18,7 @@ export async function scanSingleMod(
 		username: process.env.FACTORIO_USERNAME || process.env.USERNAME || "username",
 		token: process.env.FACTORIO_TOKEN || process.env.TOKEN || "token",
 		disableDiskCache: config.disableDiskCache,
+		disableClamAv: config.disableClamAv,
 		cacheExpiryMs: config.cacheExpiryMs,
 	}
 	const portal = new ModPortal(portalConfig)

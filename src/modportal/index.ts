@@ -11,6 +11,7 @@ export type ModPortalConfig = {
 	token: string
 	baseUrl?: string
 	disableDiskCache?: boolean
+	disableClamAv?: boolean
 	cacheExpiryMs?: number
 }
 
@@ -26,6 +27,7 @@ export class ModPortal {
 			baseUrl: "https://mods.factorio.com/",
 			disableDiskCache: false,
 			cacheExpiryMs: 30 * 24 * 60 * 60 * 1000,
+			disableClamAv: false,
 			...config,
 		})
 		console.log("ModPortal initialized")
@@ -138,12 +140,15 @@ export class ModPortal {
 		if (hashBuffer !== data.sha1) {
 			throw new Error(`Hash mismatch: expected ${data.sha1}, got ${hashBuffer}`)
 		}
+
 		// scan for malware before caching
-		const verdict = await scanBuffer(fileBuffer)
-		if (verdict === "ScanError") {
-			throw new Error("Error scanning file for malware")
-		} else if (verdict === "Malicious") {
-			throw new Error("File is malicious")
+		if (!this.config.disableClamAv) {
+			const verdict = await scanBuffer(fileBuffer)
+			if (verdict === "ScanError") {
+				throw new Error("Error scanning file for malware")
+			} else if (verdict === "Malicious") {
+				throw new Error("File is malicious")
+			}
 		}
 
 		// Store on disk (include sha1 as etag)
