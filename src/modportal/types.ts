@@ -1,5 +1,4 @@
 import z from "zod"
-import dayjs from "dayjs"
 
 export const Release = z.object({
 	download_url: z.string(),
