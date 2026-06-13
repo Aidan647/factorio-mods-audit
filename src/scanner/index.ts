@@ -54,10 +54,8 @@ export class Orchestrator {
 
 	async scanMod(mod: ModListItem): Promise<AuditReport | null> {
 		if (!mod.latest_release) throw new Error("No latest release found for mod: " + mod.name)
-		if (this.index.has(mod.latest_release.sha1)) {
-			const cached = this.loadCachedReport(mod.latest_release.sha1)
-			if (cached) return cached
-		}
+		const cached = this.loadCachedReport(mod.latest_release.sha1)
+		if (cached) return cached
 
 		const sorter = new ReportBuilder(mod, mod.latest_release, this.cfg.reportsDir)
 
@@ -89,10 +87,7 @@ export class Orchestrator {
 	/** Try to load a previously-saved report from memory cache or disk. */
 	private async loadCachedReport(sha1: string): Promise<AuditReport | null> {
 		const cached = this.reportCache.get(sha1)
-		if (cached) {
-			if (cached.errors && cached.errors.length > 0) return null
-			return cached
-		}
+		if (cached) return cached
 
 		const entry = this.index.get(sha1)
 		if (!entry) return null
