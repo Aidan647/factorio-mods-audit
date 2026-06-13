@@ -31,7 +31,7 @@ type Format = "txt" | "md" | "html"
 
 function parseArgs(): { input: string; format: Format; output: string | null; quiet: boolean } {
 	const args = process.argv.slice(2)
-	let input = "./reports/found"
+	let input = "./data/reports/found"
 	let format: Format | null = null
 	let output: string | null = null
 	let quiet = false
