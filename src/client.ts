@@ -7,9 +7,9 @@ import type { ScanParams, ScanResult } from "./server/types"
 export function scanMod(
 	ws: WebSocket,
 	modName: string,
-	version: string,
+	version?: string,
 ): Promise<ScanResult> {
-	const params: ScanParams = { modName, version }
+	const params: ScanParams = { modName, ...(version !== undefined ? { version } : {}) }
 	ws.send(JSON.stringify({ jsonrpc: "2.0", method: "scan", params, id: 1 }))
 
 	return new Promise<ScanResult>((resolve, reject) => {

@@ -52,7 +52,7 @@ export type ServerMethod = "scan" | "ping"
 
 export type ScanParams = {
 	modName: string
-	version: string
+	version?: string
 }
 
 export type ScanResult = {

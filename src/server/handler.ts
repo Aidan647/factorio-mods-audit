@@ -10,7 +10,7 @@ import type { Orchestrator } from "../scanner"
 
 const scanParamsSchema = z.object({
 	modName: z.string().min(1),
-	version: z.string().min(5),
+	version: z.string().min(5).optional(),
 })
 
 // ── Scan queue (FIFO, serial execution) ─────────────────────────────────
@@ -90,12 +90,13 @@ export class MessageHandler {
 		}
 
 		const params = parsed.data as ScanParams
-		this.log(`scan request: ${params.modName}@${params.version}`)
+		const versionLabel = params.version ?? "latest"
+		this.log(`scan request: ${params.modName}@${versionLabel}`)
 
 		// Queue the scan — runs serially with other scans
 		const result = await this.queue.enqueue(
 			async (): Promise<{ kind: "data"; data: ScanResult } | { kind: "error"; error: Error }> => {
-				this.log(`starting scan: ${params.modName}@${params.version}`)
+				this.log(`starting scan: ${params.modName}@${versionLabel}`)
 				try {
 					return await this.runScan(params)
 				} catch (err) {
@@ -105,12 +106,12 @@ export class MessageHandler {
 		)
 
 		if (result.kind === "error") {
-			this.log(`scan failed: ${params.modName}@${params.version} — ${result.error.message}`)
+			this.log(`scan failed: ${params.modName}@${versionLabel} — ${result.error.message}`)
 			this.send(ws, { jsonrpc: "2.0", error: internalError(result.error), id: req.id })
 			return
 		}
 
-		this.log(`scan complete: ${params.modName}@${params.version}`)
+		this.log(`scan complete: ${params.modName}@${versionLabel}`)
 		this.send<"scan">(ws, { jsonrpc: "2.0", result: result.data, id: req.id })
 	}
 
@@ -120,9 +121,13 @@ export class MessageHandler {
 		const modInfo = await this.deps.portal.getModInfo(params.modName).catch(() => null)
 		if (!modInfo) return { kind: "error", error: new Error(modNotFound(params.modName).message) }
 
-		const release = modInfo.releases.find((r) => r.version === params.version)
+		const release = (params.version
+			? modInfo.releases.find((r) => r.version === params.version)
+			: modInfo.releases[0]) ?? null
 		if (!release)
-			return { kind: "error", error: new Error(versionNotFound(params.modName, params.version).message) }
+			return params.version
+				? { kind: "error", error: new Error(versionNotFound(params.modName, params.version).message) }
+				: { kind: "error", error: new Error(`No releases found for mod ${params.modName}`) }
 
 		const modListItem: ModListItem = {
 			category: modInfo.category,
