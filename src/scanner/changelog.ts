@@ -238,7 +238,14 @@ export class ChangelogScanner implements Scanner {
 
 	report(_modPath: string, _sorter: ReportBuilder): ScannerResult {
 		if (this.fileMissing) {
-			return { id: this.id, score: 0, weight: this.weight, savings: 0, findings: this.findings, minimumImpact: this.minimumImpact }
+			return {
+				id: this.id,
+				score: 0,
+				weight: this.weight,
+				savings: 0,
+				findings: this.findings,
+				minimumImpact: this.minimumImpact,
+			}
 		}
 
 		// Score: sum deductions by severity, then apply asymptotic formula
@@ -250,6 +257,13 @@ export class ChangelogScanner implements Scanner {
 			else totalDeductions += 10 // low
 		}
 		const score = 100 * (100 / (100 + totalDeductions))
-		return { id: this.id, score, weight: this.weight, savings: 0, findings: this.findings, minimumImpact: this.minimumImpact }
+		return {
+			id: this.id,
+			score,
+			weight: this.weight,
+			savings: 0,
+			findings: this.findings,
+			minimumImpact: this.minimumImpact,
+		}
 	}
 }

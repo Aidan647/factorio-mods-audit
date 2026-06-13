@@ -9,6 +9,7 @@
   "private": true,
   "scripts": {
     "format-report": "bun run tools/format-report.ts",
+    "scan": "bun run src/cli/scan-command.ts",
     "start": "bun run src/index.ts",
     "test": "bun test",
     "typecheck": "bunx tsc --noEmit",

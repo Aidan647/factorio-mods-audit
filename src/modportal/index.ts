@@ -10,6 +10,8 @@ export type ModPortalConfig = {
 	username: string
 	token: string
 	baseUrl?: string
+	disableDiskCache?: boolean
+	cacheExpiryMs?: number
 }
 
 export class ModPortal {
@@ -18,24 +20,54 @@ export class ModPortal {
 	private downloadCachePromise: Promise<DiskCache<Buffer>> | null = null
 	private downloadCache: DiskCache<Buffer> | null = null
 	private readonly ratelimiter = createRateLimiter(5, 5)
+	readonly tokenValidation: Promise<void>
 	constructor(config: ModPortalConfig) {
 		this.config = Object.freeze({
 			baseUrl: "https://mods.factorio.com/",
+			disableDiskCache: false,
+			cacheExpiryMs: 30 * 24 * 60 * 60 * 1000,
 			...config,
 		})
 		console.log("ModPortal initialized")
 
 		// In-memory cache for mod info (short TTL)
-		this.modInfoCache = new MemoryCache<ModInfo>({ expiryMs: 5 * 60 * 1000 /* 5m */ })
+		this.modInfoCache = new MemoryCache<ModInfo>({
+			expiryMs: 5 * 60 * 1000, // 5m
+			pruneIntervalMs: 5 * 60 * 1000, // 5m
+			maxSize: 250,
+		})
+
+		// Start token validation in background — awaited in ensureDownloadCache
+		this.tokenValidation = this.validateToken()
 	}
 
-	private async ensureDownloadCache(): Promise<DiskCache<Buffer>> {
+	/**
+	 * Validate the configured username+token by hitting the bookmarks endpoint.
+	 * Throws if the response indicates invalid credentials.
+	 */
+	private async validateToken(): Promise<void> {
+		const url = `${this.config.baseUrl}api/bookmarks?username=${this.config.username}&token=${this.config.token}`
+		const response = await fetch(url)
+		if (!response.ok)
+			if (response.status === 403) throw new Error(`Invalid username or token.`)
+			else throw new Error(`Failed to validate ModPortal token: ${response.statusText}`)
+	}
+
+	private async ensureDownloadCache(): Promise<DiskCache<Buffer> | null> {
+		// Validate token before using the download cache
+		await this.tokenValidation.catch((err: Error) => {
+			console.error(`ModPortal: ${err.message}`)
+			process.exit(1)
+		})
+		if (this.config.disableDiskCache) return null
 		if (!this.downloadCache) {
 			if (!this.downloadCachePromise) {
+				const expiryMs = this.config.cacheExpiryMs ?? 30 * 24 * 60 * 60 * 1000
 				this.downloadCachePromise = DiskCache.create<Buffer>({
-					cacheDir: "./cache/modportal",
+					cacheDir: process.env.MODPORTAL_CACHE_DIR || "./data/cache/modportal",
 					extension: ".zip",
-					expiryMs: 24 * 60 * 60 * 1000 * 30, // 30 days
+					expiryMs,
+					pruneIntervalMs: expiryMs / 48,
 				})
 			}
 			this.downloadCache = await this.downloadCachePromise
@@ -95,8 +127,10 @@ export class ModPortal {
 		const downloadUrl = `${this.config.baseUrl}${data.download_url}?username=${this.config.username}&token=${this.config.token}`
 		const downloadCache = await this.ensureDownloadCache()
 
-		const cachedBuf = await downloadCache.get(data.sha1)
-		if (cachedBuf) return cachedBuf
+		if (downloadCache) {
+			const cachedBuf = await downloadCache.get(data.sha1)
+			if (cachedBuf) return cachedBuf
+		}
 		const response = await this.fetch(downloadUrl)
 		const fileBuffer = Buffer.from(await response.arrayBuffer())
 		// validate hash
@@ -113,7 +147,7 @@ export class ModPortal {
 		}
 
 		// Store on disk (include sha1 as etag)
-		await downloadCache.set(data.sha1, fileBuffer).catch(() => {})
+		await downloadCache?.set(data.sha1, fileBuffer).catch(() => {})
 		return fileBuffer
 	}
 }

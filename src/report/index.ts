@@ -1,7 +1,8 @@
 import type { ModListItem, Release } from "../modportal/types"
 import type { ScannerResult } from "../scanner/base"
-import { saveReportToDisk } from "./save"
 import { calculateScore } from "./score"
+
+export const SCANNER_VERSION = 1
 
 export type Finding = {
 	type: string
@@ -31,6 +32,7 @@ export type AuditReport = {
 	version: string
 	sha1: string
 	timestamp: number
+	scannerVersion: number
 	modSize?: number
 	score: number
 	potentialSavings?: number
@@ -53,7 +55,7 @@ export class ReportBuilder {
 	constructor(
 		modInfo: ModListItem,
 		release?: Release,
-		private readonly reportsDir: string = "./reports",
+		private readonly reportsDir: string = "./data/reports",
 	) {
 		this.modName = modInfo.name
 		this.modNameReadable = modInfo.title
@@ -90,7 +92,7 @@ export class ReportBuilder {
 		return calculateScore(this.scannerResults)
 	}
 
-	async saveReport(): Promise<AuditReport> {
+	saveReport(): AuditReport {
 		const scanners: ScannerReport[] = this.scannerResults.map((r) => ({
 			id: r.id,
 			score: r.score,
@@ -105,6 +107,7 @@ export class ReportBuilder {
 			version: this.version,
 			sha1: this.sha1,
 			timestamp: Date.now(),
+			scannerVersion: SCANNER_VERSION,
 			score: this.finalScore,
 			scanners,
 		}
@@ -116,7 +119,6 @@ export class ReportBuilder {
 		if (this.preflightFindings.length > 0) report.preflightFindings = this.preflightFindings
 		if (this.errors.length > 0) report.errors = this.errors.map((e) => e.message)
 
-		await saveReportToDisk(report, this.reportsDir)
 		return report
 	}
 }

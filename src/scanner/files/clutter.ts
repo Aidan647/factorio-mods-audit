@@ -1,11 +1,12 @@
 import { Glob, JSON5 } from "bun"
 import { z } from "zod"
 import path from "node:path"
-import { readFile, readdir } from "node:fs/promises"
+import { mkdir, readFile, readdir, writeFile } from "node:fs/promises"
 import type { Scanner, ScannerResult } from "../base"
 import type { Finding, ReportBuilder } from "#/report"
 import { getSize } from "#/helpers/getFolder"
 import type { PathEntry } from "../walkDir"
+import { DEFAULT_CLUTTER_RULES } from "./helpers/default-clutter-rules"
 
 type ClutterRule = {
 	type: string
@@ -22,8 +23,20 @@ type CompiledClutterRule = ClutterRule & {
 }
 
 export async function loadClutterRules(): Promise<CompiledClutterRule[]> {
-	const cfgPath = process.env.CLUTTER_RULES_PATH || path.join(process.cwd(), "config/clutter-rules.json5")
-	const raw = await readFile(cfgPath, "utf-8").catch(() => "{}")
+	const cfgPath = process.env.CLUTTER_RULES_PATH || path.join(process.cwd(), "data/clutter-rules.json5")
+	const { raw, missing } = await readFile(cfgPath, "utf-8")
+		.then((content) => ({ raw: content, missing: false }))
+		.catch((err: NodeJS.ErrnoException) => {
+			if (err.code === "ENOENT") return { raw: DEFAULT_CLUTTER_RULES, missing: true }
+			throw err
+		})
+
+	if (missing) {
+		await mkdir(path.dirname(cfgPath), { recursive: true })
+			.then(() => writeFile(cfgPath, DEFAULT_CLUTTER_RULES, "utf-8"))
+			.catch(() => console.warn("clutter rules: could not write default config"))
+	}
+
 	const parsed = JSON5.parse(raw)
 	const compiled: CompiledClutterRule[] = []
 

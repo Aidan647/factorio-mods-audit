@@ -8,6 +8,7 @@ const sampleReport: AuditReport = {
 	version: "1.2.3",
 	sha1: "abc123def456",
 	timestamp: 1700000000000,
+	scannerVersion: 1,
 	modSize: 1_250_000,
 	score: 72.5,
 	potentialSavings: 50_000,

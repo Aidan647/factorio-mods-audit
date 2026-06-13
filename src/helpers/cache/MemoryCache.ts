@@ -11,25 +11,48 @@ export interface MemoryCacheOptions<T> {
 	maxSize?: number
 	/** Auto-prune interval in milliseconds. If set, starts prune scheduler */
 	pruneIntervalMs?: number
+	/** Maximum RSS memory in MB before aggressive shrinking. Only used when checkIntervalMs is set. */
+	maxMemoryMB?: number
+	/** Interval to check memory pressure in milliseconds. If set, starts memory pressure monitoring. */
+	checkIntervalMs?: number
 }
 
 /**
- * In-memory cache with LRU eviction.
+ * Step size as % of maxSize for memory pressure adjustments.
+ * Minimum 10 entries.
+ */
+function calcStepSize(maxSize: number | undefined): number {
+	return maxSize ? Math.max(10, Math.floor(maxSize * 0.20)) : 10
+}
+
+/** Absolute maximum L1 size cap */
+const ABSOLUTE_MAX_SIZE = 8192
+
+/**
+ * In-memory cache with LRU eviction and memory-pressure-aware sizing.
  * Supports dynamic max size adjustment for memory pressure handling.
  */
 export class MemoryCache<T> {
 	private readonly cache = new Map<string, CacheEntry<T>>()
 	private pruneTimer: ReturnType<typeof setInterval> | null = null
+	private memoryCheckTimer: ReturnType<typeof setInterval> | null = null
 
 	private readonly expiryMs: number
 	private maxSize: number | undefined
+	private readonly maxMemoryMB: number | undefined
+	private readonly stepSize: number
 
 	constructor(options: MemoryCacheOptions<T>) {
 		this.expiryMs = options.expiryMs
 		this.maxSize = options.maxSize
+		this.maxMemoryMB = options.maxMemoryMB
+		this.stepSize = calcStepSize(this.maxSize)
 
 		if (options.pruneIntervalMs) {
 			this.pruneTimer = setInterval(() => this.prune(), options.pruneIntervalMs)
+		}
+		if (options.checkIntervalMs && this.maxMemoryMB) {
+			this.memoryCheckTimer = setInterval(() => this.checkMemoryPressure(), options.checkIntervalMs)
 		}
 	}
 
@@ -182,12 +205,58 @@ export class MemoryCache<T> {
 	}
 
 	/**
-	 * Stop prune scheduler and clean up resources.
+	 * Check process RSS memory and shrink cache if exceeding threshold.
+	 * No-op if maxMemoryMB was not configured.
+	 */
+	checkMemoryPressure(): void {
+		if (!this.maxMemoryMB || !this.maxSize) return
+
+		const rssBytes = process.memoryUsage().rss
+		const rssMB = rssBytes / 1024 / 1024
+		const rssPercent = rssMB / this.maxMemoryMB
+
+		const cachePercent = this.cache.size / this.maxSize
+
+		if (rssPercent > 1.1) {
+			// >110%: emergency shrink by 10 steps
+			this.adjustMaxSize(-10 * this.stepSize)
+		} else if (rssPercent >= 1.0) {
+			// ≥100%: shrink by 5 steps
+			this.adjustMaxSize(-5 * this.stepSize)
+		} else if (rssPercent > 0.9) {
+			// >90%: shrink by 2 steps
+			this.adjustMaxSize(-2 * this.stepSize)
+		} else if (cachePercent > 0.8 && rssPercent < 0.6) {
+			// Cache >80% full AND RSS <60%: grow by 3 steps
+			this.adjustMaxSize(3 * this.stepSize)
+		} else if (cachePercent > 0.9 && rssPercent < 0.8) {
+			// Cache >90% full AND RSS <80%: grow by 1 step
+			this.adjustMaxSize(this.stepSize)
+		}
+		this.prune() // Also prune expired entries on each check
+	}
+
+	private adjustMaxSize(delta: number): void {
+		const minSize = Math.max(10, this.stepSize)
+		const newSize = (this.maxSize ?? minSize) + delta
+		this.maxSize = Math.max(minSize, Math.min(newSize, ABSOLUTE_MAX_SIZE))
+
+		if (this.cache.size > this.maxSize) {
+			this.shrink(this.maxSize)
+		}
+	}
+
+	/**
+	 * Stop prune scheduler, memory check timer, and clean up resources.
 	 */
 	destroy(): void {
 		if (this.pruneTimer) {
 			clearInterval(this.pruneTimer)
 			this.pruneTimer = null
+		}
+		if (this.memoryCheckTimer) {
+			clearInterval(this.memoryCheckTimer)
+			this.memoryCheckTimer = null
 		}
 	}
 }

@@ -1,11 +1,12 @@
 import { Glob, JSON5 } from "bun"
 import { z } from "zod"
 import path from "node:path"
-import { readdir, readFile } from "node:fs/promises"
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises"
 import type { Scanner, ScannerResult } from "../base"
 import type { Finding, ReportBuilder } from "#/report"
 import { checkImage, loadImage, type ImageFinding } from "./helpers/image-checks"
 import type { FileEntry, PathEntry } from "../walkDir"
+import { DEFAULT_IMAGE_RULES } from "./helpers/default-image-rules"
 
 type SizeInput = number | { width: number; height: number }
 
@@ -37,8 +38,20 @@ let cachedRules: CompiledImageRule[] | null = null
 async function loadImageRules(): Promise<CompiledImageRule[]> {
 	if (cachedRules) return cachedRules
 
-	const cfgPath = process.env.IMAGE_RULES_PATH || path.join(process.cwd(), "config/image-rules.json5")
-	const raw = await readFile(cfgPath, "utf-8").catch(() => "{}")
+	const cfgPath = process.env.IMAGE_RULES_PATH || path.join(process.cwd(), "data/image-rules.json5")
+	const { raw, missing } = await readFile(cfgPath, "utf-8")
+		.then((content) => ({ raw: content, missing: false }))
+		.catch((err: NodeJS.ErrnoException) => {
+			if (err.code === "ENOENT") return { raw: DEFAULT_IMAGE_RULES, missing: true }
+			throw err
+		})
+
+	if (missing) {
+		await mkdir(path.dirname(cfgPath), { recursive: true })
+			.then(() => writeFile(cfgPath, DEFAULT_IMAGE_RULES, "utf-8"))
+			.catch(() => console.warn("image rules: could not write default config"))
+	}
+
 	const parsed = JSON5.parse(raw)
 	const compiled: CompiledImageRule[] = []
 

@@ -1,7 +1,10 @@
-import { rm } from "fs/promises"
-import { runCLI } from "./cli"
-import { defaultConfig } from "./config"
+// Library entry — export public API
+export { scanSingleMod } from "./cli"
+export { default as ModPortal, type ModPortalConfig } from "./modportal"
+export { Orchestrator } from "./scanner"
+export { ReportBuilder, type AuditReport, type Finding, type ScannerReport } from "./report"
+export { formatTxt, formatMd, formatHtml } from "./report/formatters"
+export { loadConfig, defaultConfig, type ScanConfig } from "./config"
+export type { ModListItem, ModInfo, Release } from "./modportal/types"
+export type { Scanner, ScannerResult } from "./scanner/base"
 
-await rm(defaultConfig.reportsDir, { recursive: true, force: true })
-await runCLI()
-process.exit(0)

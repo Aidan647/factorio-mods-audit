@@ -222,7 +222,8 @@ Date: 06. 06. 2021
 	})
 
 	test("handles CRLF (\\r\\n) line endings", () => {
-		const crlf = "---------------------------------------------------------------------------------------------------\r\nVersion: 1.1.60\r\nDate: 06. 06. 2022\r\n  Features:\r\n    - Entry one.\r\n    - Entry two.\r\n"
+		const crlf =
+			"---------------------------------------------------------------------------------------------------\r\nVersion: 1.1.60\r\nDate: 06. 06. 2022\r\n  Features:\r\n    - Entry one.\r\n    - Entry two.\r\n"
 		const result = parseChangelog(crlf)
 		expect(result.errors).toEqual([])
 		expect(result.sections).toHaveLength(1)
