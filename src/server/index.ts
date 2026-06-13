@@ -17,8 +17,7 @@ export function createServer(opts: WebSocketServerOptions) {
 		port: opts.port,
 		hostname: opts.host ?? "localhost",
 		fetch(req, server) {
-			const url = new URL(req.url)
-			if (url.pathname === "/ws" && server.upgrade(req)) {
+			if (server.upgrade(req)) {
 				return
 			}
 			return new Response("Not found", { status: 404 })

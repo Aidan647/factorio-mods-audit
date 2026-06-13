@@ -40,7 +40,7 @@ const orchestrator = new Orchestrator(portal, config)
 await orchestrator.loadIndex()
 const server = createServer({ port, host, portal, orchestrator })
 
-console.log(`WebSocket server listening on ws://${host ?? "localhost"}:${port}/ws`)
+console.log(`WebSocket server listening on ws://${host ?? "localhost"}:${port}/`)
 console.log("Press Ctrl+C to stop")
 
 // Prevent the process from exiting
