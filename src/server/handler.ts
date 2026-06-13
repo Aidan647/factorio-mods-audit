@@ -121,9 +121,10 @@ export class MessageHandler {
 		const modInfo = await this.deps.portal.getModInfo(params.modName).catch(() => null)
 		if (!modInfo) return { kind: "error", error: new Error(modNotFound(params.modName).message) }
 
-		const release = (params.version
-			? modInfo.releases.find((r) => r.version === params.version)
-			: modInfo.releases[0]) ?? null
+		const release =
+			(params.version
+				? modInfo.releases.find((r) => r.version === params.version)
+				: modInfo.releases[modInfo.releases.length - 1]) ?? null
 		if (!release)
 			return params.version
 				? { kind: "error", error: new Error(versionNotFound(params.modName, params.version).message) }
