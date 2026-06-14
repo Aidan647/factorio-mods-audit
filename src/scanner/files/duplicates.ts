@@ -4,7 +4,7 @@ import { readdir, readFile } from "node:fs/promises"
 import type { Scanner, ScannerResult } from "../base"
 import type { Finding, ReportBuilder } from "#/report"
 import { getSize } from "#/helpers/getFolder"
-import { ClutterScanner, loadClutterRules } from "./clutter"
+import { ClutterScanner } from "./clutter"
 import type { FileEntry, PathEntry } from "../walkDir"
 
 type DublicateEntry = {
@@ -24,6 +24,17 @@ export class DuplicatesScanner implements Scanner {
 	readonly weight = 70
 	readonly findings: Finding[] = []
 	readonly duplicateGroups: Map<string, DublicateEntry[]> = new Map()
+
+	static loaded = false
+
+	static async load(): Promise<void> {
+		if (!ClutterScanner.loaded) await ClutterScanner.load()
+		if (!ClutterScanner.loaded) {
+			console.warn("DuplicatesScanner: failed to load clutter rules.")
+			return
+		}
+		DuplicatesScanner.loaded = ClutterScanner.loaded
+	}
 
 	report(modPath: string, sorter: ReportBuilder): ScannerResult {
 		const findings: Finding[] = []
@@ -53,7 +64,6 @@ export class DuplicatesScanner implements Scanner {
 
 	async scanFile(modPath: string, sorter: ReportBuilder, fileEntry: PathEntry): Promise<void> {
 		if (fileEntry.isDirectory) return
-		if (!ClutterScanner.rules) ClutterScanner.rules = await loadClutterRules()
 		if (this.isClutter(fileEntry.relativePath, path.basename(fileEntry.relativePath))) return
 
 		await this.hashFile(fileEntry)
@@ -63,8 +73,7 @@ export class DuplicatesScanner implements Scanner {
 	 * Check if a path matches any loaded clutter rule.
 	 */
 	private isClutter(relativePath: string, name: string): boolean {
-		const rules = ClutterScanner.rules ?? []
-		for (const rule of rules) {
+		for (const rule of ClutterScanner.rules) {
 			if (!rule.matcher.match(relativePath) && !rule.matcher.match(name)) continue
 			if (rule.exceptions) {
 				let excluded = false

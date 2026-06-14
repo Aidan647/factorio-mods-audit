@@ -39,6 +39,7 @@ await portal.tokenValidation // Ensure token is valid before accepting connectio
 
 const orchestrator = new Orchestrator(portal, config)
 await orchestrator.loadIndex()
+await orchestrator.loadScanners()
 const server = createServer({ port, host, portal, orchestrator })
 
 console.log(`WebSocket server listening on ws://${host ?? "localhost"}:${port}/`)

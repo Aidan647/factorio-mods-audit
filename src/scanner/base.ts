@@ -25,6 +25,7 @@ export interface Scanner {
 	readonly minimumImpact?: number
 	readonly findings: Finding[]
 
+
 	scan?(modPath: string, sorter: ReportBuilder): Promise<void>
 
 	report(modPath: string, sorter: ReportBuilder): ScannerResult
@@ -37,6 +38,8 @@ export interface Scanner {
 
 export interface ScannerFactory {
 	new (): Scanner
+	loaded: boolean
+	load?(): Promise<void>
 }
 // export abstract class Scanner {
 // 	abstract readonly id: string

@@ -52,11 +52,24 @@ export class Orchestrator {
 		return this
 	}
 
+	async loadScanners(): Promise<this> {
+		for (const factory of this.scanners) {
+			if (factory.loaded) continue
+			if (factory.load) await factory.load()
+			if (!factory.loaded) {
+				console.error(`Scanner ${factory.name} did loaded`)
+				process.exit(1)
+			}
+		}
+		return this
+	}
+
 	async scanMod(mod: ModListItem): Promise<AuditReport> {
 		if (!mod.latest_release) throw new Error("No latest release found for mod: " + mod.name)
 		const cached = await this.loadCachedReport(mod.latest_release.sha1)
 		if (cached) return cached
 
+		await this.loadScanners()
 		const sorter = new ReportBuilder(mod, mod.latest_release, this.cfg.reportsDir)
 
 		// Stage 1: Preflight — download, unpack, virus scan, find mod folder

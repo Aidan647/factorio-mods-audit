@@ -1,84 +1,12 @@
-import { Glob, JSON5 } from "bun"
-import { z } from "zod"
+import { Glob } from "bun"
 import path from "node:path"
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises"
+import { readdir } from "node:fs/promises"
 import type { Scanner, ScannerResult } from "../base"
 import type { Finding, ReportBuilder } from "#/report"
 import { getSize } from "#/helpers/getFolder"
 import type { PathEntry } from "../walkDir"
-import { DEFAULT_CLUTTER_RULES } from "./helpers/default-clutter-rules"
+import { loadClutterRules, type CompiledClutterRule } from "./helpers/default-clutter-rules"
 
-type ClutterRule = {
-	type: string
-	description: string
-	glob: string
-	category?: string
-	severity?: "low" | "medium" | "high"
-	exceptions?: string[]
-}
-
-type CompiledClutterRule = ClutterRule & {
-	matcher: Glob
-	matcherExceptions?: Glob
-}
-
-export async function loadClutterRules(): Promise<CompiledClutterRule[]> {
-	const cfgPath = process.env.CLUTTER_RULES_PATH || path.join(process.cwd(), "data/clutter-rules.json5")
-	const { raw, missing } = await readFile(cfgPath, "utf-8")
-		.then((content) => ({ raw: content, missing: false }))
-		.catch((err: NodeJS.ErrnoException) => {
-			if (err.code === "ENOENT") return { raw: DEFAULT_CLUTTER_RULES, missing: true }
-			throw err
-		})
-
-	if (missing) {
-		await mkdir(path.dirname(cfgPath), { recursive: true })
-			.then(() => writeFile(cfgPath, DEFAULT_CLUTTER_RULES, "utf-8"))
-			.catch(() => console.warn("clutter rules: could not write default config"))
-	}
-
-	const parsed = JSON5.parse(raw)
-	const compiled: CompiledClutterRule[] = []
-
-	const Schema = z.object({
-		rules: z.array(
-			z.object({
-				type: z.string(),
-				description: z.string(),
-				globs: z.array(z.string()),
-				category: z.string().optional(),
-				severity: z.enum(["low", "medium", "high"]).optional(),
-				exceptions: z.array(z.string()).optional(),
-			}),
-		),
-	})
-
-	const parsedCfg = Schema.safeParse(parsed)
-	if (!parsedCfg.success) {
-		console.warn("clutter rules: config validation failed; no rules loaded")
-		return compiled
-	}
-
-	for (const rule of parsedCfg.data.rules) {
-		const type = rule.type
-		const description = rule.description
-		const category = rule.category
-		const severity = rule.severity
-		const exceptions = rule.exceptions
-		for (const g of rule.globs) {
-			compiled.push({
-				type,
-				description,
-				glob: g,
-				category,
-				severity,
-				exceptions,
-				matcher: new Glob(g),
-			})
-		}
-	}
-	return compiled
-}
 
 /**
  * Scanner that finds clutter/development files in the mod directory.
@@ -89,11 +17,31 @@ export class ClutterScanner implements Scanner {
 	readonly findings: Finding[] = []
 
 	/** Lazy-loaded compiled rules, loaded once on first scan. */
-	static rules: CompiledClutterRule[] | null = null
+	static rules: CompiledClutterRule[] = []
+	static loaded = false
+
+	static async load(): Promise<void> {
+		ClutterScanner.rules = await loadClutterRules()
+		ClutterScanner.loaded = true
+	}
 
 	async scan(modPath: string, sorter: ReportBuilder): Promise<void> {
-		if (!ClutterScanner.rules) ClutterScanner.rules = await loadClutterRules()
-		await this.scanParentDir(modPath)
+		const parentDir = path.join(modPath, "..")
+		const modName = path.basename(modPath)
+		const entries = await readdir(parentDir, { withFileTypes: true }).catch(() => [])
+
+		for (const entry of entries) {
+			if (entry.name === modName) continue
+			const entryPath = path.join(parentDir, entry.name)
+			const relativePath = path.relative(modPath, entryPath)
+			this.findings.push({
+				type: "clutter:extra-parent-entry",
+				description: `Unexpected file/folder found alongside mod directory in zip: ${entry.name}`,
+				severity: "high",
+				paths: [relativePath],
+				potentialSavings: await getSize(entryPath).catch(() => 0),
+			})
+		}
 	}
 
 	report(modPath: string, sorter: ReportBuilder): ScannerResult {
@@ -117,8 +65,6 @@ export class ClutterScanner implements Scanner {
 		return { id: this.id, score, weight: this.weight, savings: totalSavings, findings: grouped }
 	}
 	async scanFile(modPath: string, sorter: ReportBuilder, pathEntry: PathEntry): Promise<boolean> {
-		if (!ClutterScanner.rules) ClutterScanner.rules = await loadClutterRules()
-
 		const matchedRule = this.matchClutterRule(pathEntry.relativePath, path.basename(pathEntry.relativePath))
 		if (matchedRule) {
 			this.findings.push({
@@ -132,28 +78,7 @@ export class ClutterScanner implements Scanner {
 		}
 		return false
 	}
-	/**
-	 * Scan the parent directory for entries that aren't the mod folder itself.
-	 * These are files/folders accidentally included at the wrong zip level.
-	 */
-	private async scanParentDir(modPath: string): Promise<void> {
-		const parentDir = path.join(modPath, "..")
-		const modName = path.basename(modPath)
-		const entries = await readdir(parentDir, { withFileTypes: true }).catch(() => [])
 
-		for (const entry of entries) {
-			if (entry.name === modName) continue
-			const entryPath = path.join(parentDir, entry.name)
-			const relativePath = path.relative(modPath, entryPath)
-			this.findings.push({
-				type: "clutter:extra-parent-entry",
-				description: `Unexpected file/folder found alongside mod directory in zip: ${entry.name}`,
-				severity: "high",
-				paths: [relativePath],
-				potentialSavings: await getSize(entryPath).catch(() => 0),
-			})
-		}
-	}
 
 	private groupFindings(): Finding[] {
 		const findingsByType: Record<
@@ -185,9 +110,8 @@ export class ClutterScanner implements Scanner {
 		return Object.values(findingsByType)
 	}
 
-	private matchClutterRule(relativePath: string, name: string): ClutterRule | null {
-		const rules = ClutterScanner.rules ?? []
-		for (const rule of rules) {
+	private matchClutterRule(relativePath: string, name: string): CompiledClutterRule | null {
+		for (const rule of ClutterScanner.rules) {
 			if (!rule.matcher.match(relativePath) && !rule.matcher.match(name)) continue
 			if (rule.exceptions) {
 				let excluded = false

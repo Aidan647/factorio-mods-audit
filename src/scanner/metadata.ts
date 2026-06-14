@@ -136,6 +136,8 @@ export class MetadataScanner implements Scanner {
 	readonly findings: Finding[] = []
 	private data: InfoJson | null = null
 
+	static loaded = true
+
 	async scan(modPath: string, sorter: ReportBuilder): Promise<void> {
 		const infoJsonPath = path.join(modPath, "info.json")
 		this.data = JSON.parse((await readFile(infoJsonPath, "utf-8").catch(() => "{}")) || "{}")

@@ -42,6 +42,7 @@ export async function scanSingleMod(
 
 	const scanner = new Orchestrator(portal, config)
 	await scanner.loadIndex()
+	await scanner.loadScanners()
 
 	console.log(`Scanning ${modInfo.title} v${latestRelease.version}...`)
 	const report = await scanner.scanMod(modListItem)

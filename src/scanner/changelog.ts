@@ -171,6 +171,8 @@ export class ChangelogScanner implements Scanner {
 	readonly minimumImpact: number = 80
 	readonly findings: Finding[] = []
 
+	static loaded = true
+
 	private parseResult: ChangelogParseResult | null = null
 	private fileMissing = false
 

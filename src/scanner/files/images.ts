@@ -103,10 +103,12 @@ export class ImagesScanner implements Scanner {
 	readonly rawFindings: ImageFinding[] = []
 
 	/** Lazy-loaded compiled rules, loaded once on first scan. */
-	static rules: CompiledImageRule[] | null = null
+	static rules: CompiledImageRule[] = []
+	static loaded = false
 
-	async scan(modPath: string, sorter: ReportBuilder): Promise<void> {
-		if (!ImagesScanner.rules) ImagesScanner.rules = await loadImageRules()
+	static async load(): Promise<void> {
+		ImagesScanner.rules = await loadImageRules()
+		ImagesScanner.loaded = true
 	}
 
 	report(modPath: string, sorter: ReportBuilder): ScannerResult {
@@ -133,7 +135,6 @@ export class ImagesScanner implements Scanner {
 	async scanFile(modPath: string, sorter: ReportBuilder, fileEntry: PathEntry): Promise<void> {
 		if (fileEntry.isDirectory) return
 		if (!fileEntry.relativePath.endsWith(".png")) return
-		if (!ImagesScanner.rules) ImagesScanner.rules = await loadImageRules()
 		const info = await loadImage(fileEntry)
 		if (!info) return
 		const [img, fileSize] = info
@@ -150,7 +151,7 @@ export class ImagesScanner implements Scanner {
 
 	private matchRules(relativePath: string): CompiledImageRule[] {
 		const matched: CompiledImageRule[] = []
-		for (const rule of ImagesScanner.rules ?? []) {
+		for (const rule of ImagesScanner.rules) {
 			for (const matcher of rule.matchers) {
 				if (matcher.match(relativePath)) {
 					matched.push(rule)

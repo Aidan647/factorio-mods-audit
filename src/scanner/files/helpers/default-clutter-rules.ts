@@ -1,4 +1,9 @@
-export const DEFAULT_CLUTTER_RULES:string = `{
+import { Glob, JSON5 } from "bun"
+import { mkdir, readFile, writeFile } from "node:fs/promises"
+import path from "node:path"
+import z from "zod"
+
+export const DEFAULT_CLUTTER_RULES: string = `{
 	rules: [
 		{
 			type: "backup",
@@ -190,3 +195,75 @@ export const DEFAULT_CLUTTER_RULES:string = `{
 		},
 	],
 }`
+
+type ClutterRule = {
+	type: string
+	description: string
+	glob: string
+	category?: string
+	severity?: "low" | "medium" | "high"
+	exceptions?: string[]
+}
+
+export type CompiledClutterRule = ClutterRule & {
+	matcher: Glob
+	matcherExceptions?: Glob
+}
+
+export async function loadClutterRules(): Promise<CompiledClutterRule[]> {
+	const cfgPath = process.env.CLUTTER_RULES_PATH || path.join(process.cwd(), "data/clutter-rules.json5")
+	const { raw, missing } = await readFile(cfgPath, "utf-8")
+		.then((content) => ({ raw: content, missing: false }))
+		.catch((err: NodeJS.ErrnoException) => {
+			if (err.code === "ENOENT") return { raw: DEFAULT_CLUTTER_RULES, missing: true }
+			throw err
+		})
+
+	if (missing) {
+		await mkdir(path.dirname(cfgPath), { recursive: true })
+			.then(() => writeFile(cfgPath, DEFAULT_CLUTTER_RULES, "utf-8"))
+			.catch(() => console.warn("clutter rules: could not write default config"))
+	}
+
+	const parsed = JSON5.parse(raw)
+	const compiled: CompiledClutterRule[] = []
+
+	const Schema = z.object({
+		rules: z.array(
+			z.object({
+				type: z.string(),
+				description: z.string(),
+				globs: z.array(z.string()),
+				category: z.string().optional(),
+				severity: z.enum(["low", "medium", "high"]).optional(),
+				exceptions: z.array(z.string()).optional(),
+			}),
+		),
+	})
+
+	const parsedCfg = Schema.safeParse(parsed)
+	if (!parsedCfg.success) {
+		console.warn("clutter rules: config validation failed; no rules loaded")
+		return compiled
+	}
+
+	for (const rule of parsedCfg.data.rules) {
+		const type = rule.type
+		const description = rule.description
+		const category = rule.category
+		const severity = rule.severity
+		const exceptions = rule.exceptions
+		for (const g of rule.globs) {
+			compiled.push({
+				type,
+				description,
+				glob: g,
+				category,
+				severity,
+				exceptions,
+				matcher: new Glob(g),
+			})
+		}
+	}
+	return compiled
+}
