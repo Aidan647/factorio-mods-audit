@@ -5,8 +5,8 @@ import type { Scanner, ScannerResult } from "../base"
 import type { Finding, ReportBuilder } from "#/report"
 import { getSize } from "#/helpers/getFolder"
 import type { PathEntry } from "../walkDir"
-import { loadClutterRules, type CompiledClutterRule } from "./helpers/default-clutter-rules"
-
+import { loadClutterRules, type CompiledClutterRule } from "./helpers/clutter-rules"
+import { Rules } from "./helpers/rules"
 
 /**
  * Scanner that finds clutter/development files in the mod directory.
@@ -17,11 +17,12 @@ export class ClutterScanner implements Scanner {
 	readonly findings: Finding[] = []
 
 	/** Lazy-loaded compiled rules, loaded once on first scan. */
-	static rules: CompiledClutterRule[] = []
+	static readonly rules: Rules<CompiledClutterRule> = new Rules<CompiledClutterRule>()
 	static loaded = false
 
 	static async load(): Promise<void> {
-		ClutterScanner.rules = await loadClutterRules()
+		if (ClutterScanner.loaded) return
+		ClutterScanner.rules.loadRules(loadClutterRules)
 		ClutterScanner.loaded = true
 	}
 
@@ -65,7 +66,7 @@ export class ClutterScanner implements Scanner {
 		return { id: this.id, score, weight: this.weight, savings: totalSavings, findings: grouped }
 	}
 	async scanFile(modPath: string, sorter: ReportBuilder, pathEntry: PathEntry): Promise<boolean> {
-		const matchedRule = this.matchClutterRule(pathEntry.relativePath, path.basename(pathEntry.relativePath))
+		const matchedRule = ClutterScanner.matchRules(pathEntry.relativePath, path.basename(pathEntry.relativePath))
 		if (matchedRule) {
 			this.findings.push({
 				type: `clutter:${matchedRule.type}`,
@@ -78,7 +79,6 @@ export class ClutterScanner implements Scanner {
 		}
 		return false
 	}
-
 
 	private groupFindings(): Finding[] {
 		const findingsByType: Record<
@@ -110,21 +110,20 @@ export class ClutterScanner implements Scanner {
 		return Object.values(findingsByType)
 	}
 
-	private matchClutterRule(relativePath: string, name: string): CompiledClutterRule | null {
+	static matchRules(relativePath: string, name: string): CompiledClutterRule | null {
 		for (const rule of ClutterScanner.rules) {
-			if (!rule.matcher.match(relativePath) && !rule.matcher.match(name)) continue
-			if (rule.exceptions) {
-				let excluded = false
-				for (const exc of rule.exceptions) {
-					if (new Glob(exc).match(relativePath) || new Glob(exc).match(name)) {
-						excluded = true
-						break
-					}
-				}
-				if (excluded) continue
-			}
-			return rule
+			if (this.matchRule(rule, relativePath, name)) return rule
 		}
 		return null
+	}
+	private static matchRule(rule: CompiledClutterRule, relativePath: string, name: string): boolean {
+		if (this.matchExeptions(rule, relativePath, name)) return false
+		for (const matcher of rule.matchers) if (matcher.match(relativePath) || matcher.match(name)) return true
+		return false
+	}
+	private static matchExeptions(rule: CompiledClutterRule, relativePath: string, name: string): boolean {
+		for (const exception of rule.matcherExceptions)
+			if (exception.match(relativePath) || exception.match(name)) return true
+		return false
 	}
 }

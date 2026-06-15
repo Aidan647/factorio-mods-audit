@@ -1,5 +1,10 @@
-// Array of rule objects: { type, description, globs: string[] }
-[
+import { Glob, JSON5 } from "bun"
+import { mkdir, readFile, writeFile } from "node:fs/promises"
+import path from "node:path"
+import z from "zod"
+import { Rules } from "./rules"
+
+export const DEFAULT_CLUTTER_RULES: ClutterRule[] = [
 	{
 		type: "backup",
 		description: "Temporary editor state files should never be shipped in ModPortal zips.",
@@ -56,8 +61,6 @@
 		severity: "high",
 		globs: ["*.mp3", "*.wav", "*.flac", "*.aac"],
 	},
-
-	// Document formats that don't belong in mod bundles
 	{
 		type: "documents",
 		description: "Office documents and PDFs are not part of mod releases.",
@@ -65,8 +68,6 @@
 		severity: "medium",
 		globs: ["*.pdf", "*.doc", "*.docx", "*.odt", "*.rtf"],
 	},
-
-	// Font binaries (unusual for most mods unless GUI-focused)
 	{
 		type: "fonts",
 		description: "Font files should only ship when the mod requires custom fonts.",
@@ -74,8 +75,6 @@
 		severity: "low",
 		globs: ["*.ttf", "*.otf", "*.woff", "*.woff2"],
 	},
-
-	// Version control and editor folders/metadata (should never be published)
 	{
 		type: "vcs",
 		description: "Repository metadata is not part of the release payload.",
@@ -83,7 +82,6 @@
 		severity: "high",
 		globs: [".git", ".github", ".gitignore", ".gitattributes", ".gitmodules", ".svn", ".hg", ".bzr"],
 	},
-
 	{
 		type: "ide",
 		description: "Editor state and workspace config should stay out of published mods.",
@@ -91,8 +89,6 @@
 		severity: "medium",
 		globs: [".vscode", ".idea", "*.sublime-project", "*.sublime-workspace", ".vs", "*.code-workspace", "*.iml"],
 	},
-
-	// OS metadata files (commonly slip into zips)
 	{
 		type: "osMetadata",
 		description: "OS folder metadata and thumbnail caches should not be published.",
@@ -100,8 +96,6 @@
 		severity: "high",
 		globs: [".DS_Store", "Thumbs.db", "Desktop.ini"],
 	},
-
-	// Node / JS / toolkit artifacts and build outputs (dev only)
 	{
 		type: "nodeArtifacts",
 		description: "Tooling dependencies and build artifacts are not release assets.",
@@ -124,8 +118,6 @@
 			".turbo",
 		],
 	},
-
-	// Test and CI artifacts
 	{
 		type: "testReports",
 		description: "Test output and coverage are useful locally but should not ship.",
@@ -142,8 +134,6 @@
 			"lcov.info",
 		],
 	},
-
-	// Image source files from image editing projects (GIMP, Krita, Photoshop, etc.)
 	{
 		type: "imageSources",
 		description: "Image project sources are not release assets; export PNGs instead.",
@@ -151,8 +141,6 @@
 		severity: "high",
 		globs: ["*.xcf", "*.kra", "*.psd", "*.ora", "*.ai", "*.svg", "*.psb", "*.xcf.bak", "*.kra~", "*.ora~"],
 	},
-
-	// Compiled/temporary artifacts from other languages/tools
 	{
 		type: "compiled",
 		description: "Generated binaries and caches should not be included in release archives.",
@@ -208,8 +196,6 @@
 			"*.gradle",
 		],
 	},
-
-	// Secrets and keys (should never be published)
 	{
 		type: "secrets",
 		description: "Secrets and private keys must never be published.",
@@ -217,8 +203,6 @@
 		severity: "high",
 		globs: [".env", "*.env", "*.env.local", "*.pem", "*.key", "*.crt", "*.p12", "*.pfx", "id_rsa*", "secrets.*"],
 	},
-
-	// Catch-all: hidden dotfiles — moved to bottom so other rules match first
 	{
 		type: "dotFiles",
 		description: "Hidden dotfiles should be treated as clutter unless explicitly allowed.",
@@ -226,3 +210,63 @@
 		globs: [".*"],
 	},
 ]
+
+const ClutterRule = z.object({
+	type: z.string(),
+	description: z.string(),
+	globs: z.array(z.string()),
+	category: z.string().optional(),
+	severity: z.enum(["low", "medium", "high"]).optional(),
+	exceptions: z.array(z.string()).optional(),
+})
+type ClutterRule = z.infer<typeof ClutterRule>
+
+export type CompiledClutterRule = {
+	type: string
+	description: string
+	category?: string
+	severity: "low" | "medium" | "high"
+	matchers: Glob[]
+	matcherExceptions: Glob[]
+}
+
+function compileClutterRule(rule: ClutterRule): CompiledClutterRule {
+	const matchers = rule.globs.map((pattern) => new Glob(pattern))
+	const matcherExceptions = rule.exceptions?.map((pattern) => new Glob(pattern)) ?? []
+	return {
+		type: rule.type,
+		description: rule.description,
+		category: rule.category,
+		severity: rule.severity ?? "low",
+		matchers,
+		matcherExceptions,
+	} satisfies CompiledClutterRule
+}
+
+export async function loadClutterRules(): Promise<CompiledClutterRule[]> {
+	const cfgPath = process.env.CLUTTER_RULES_PATH || path.join(process.cwd(), "data/clutter-rules.json5")
+	const loaded: ClutterRule[] = await readFile(cfgPath, "utf-8")
+		.catch(() => null)
+		.then(async (content) => {
+			if (content) {
+				try {
+					const parsed = JSON5.parse(content)
+					const validated = z.array(ClutterRule).safeParse(parsed)
+					if (validated.success) {
+						return validated.data
+					} else {
+						console.error(`Invalid clutter rules format in ${cfgPath}:`, z.treeifyError(validated.error))
+					}
+				} catch (err) {
+					console.error(`Failed to parse clutter rules from ${cfgPath}:`, err)
+				}
+				process.exit(1)
+			}
+			// save default rules to disk for user reference and editing
+			await mkdir(path.dirname(cfgPath), { recursive: true }).catch(() => {})
+			await writeFile(cfgPath, JSON5.stringify(DEFAULT_CLUTTER_RULES, null, 2) ?? "").catch(() => {})
+			return DEFAULT_CLUTTER_RULES
+		})
+
+	return loaded.map(compileClutterRule)
+}

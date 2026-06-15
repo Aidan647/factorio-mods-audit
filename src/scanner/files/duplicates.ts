@@ -29,10 +29,7 @@ export class DuplicatesScanner implements Scanner {
 
 	static async load(): Promise<void> {
 		if (!ClutterScanner.loaded) await ClutterScanner.load()
-		if (!ClutterScanner.loaded) {
-			console.warn("DuplicatesScanner: failed to load clutter rules.")
-			return
-		}
+		if (!ClutterScanner.loaded) return console.warn("DuplicatesScanner: failed to load clutter rules.")
 		DuplicatesScanner.loaded = ClutterScanner.loaded
 	}
 
@@ -64,30 +61,9 @@ export class DuplicatesScanner implements Scanner {
 
 	async scanFile(modPath: string, sorter: ReportBuilder, fileEntry: PathEntry): Promise<void> {
 		if (fileEntry.isDirectory) return
-		if (this.isClutter(fileEntry.relativePath, path.basename(fileEntry.relativePath))) return
+		if (ClutterScanner.matchRules(fileEntry.relativePath, path.basename(fileEntry.relativePath))) return
 
 		await this.hashFile(fileEntry)
-	}
-
-	/**
-	 * Check if a path matches any loaded clutter rule.
-	 */
-	private isClutter(relativePath: string, name: string): boolean {
-		for (const rule of ClutterScanner.rules) {
-			if (!rule.matcher.match(relativePath) && !rule.matcher.match(name)) continue
-			if (rule.exceptions) {
-				let excluded = false
-				for (const exc of rule.exceptions) {
-					if (new Glob(exc).match(relativePath) || new Glob(exc).match(name)) {
-						excluded = true
-						break
-					}
-				}
-				if (excluded) continue
-			}
-			return true
-		}
-		return false
 	}
 
 	private async hashFile(file: FileEntry): Promise<void> {

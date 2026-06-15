@@ -20,7 +20,7 @@ export class ModPortal {
 	private readonly modInfoCache: MemoryCache<ModInfo>
 	private downloadCachePromise: Promise<DiskCache<Buffer>> | null = null
 	private downloadCache: DiskCache<Buffer> | null = null
-	private readonly ratelimiter = createRateLimiter(5, 5)
+	private readonly ratelimiter = createRateLimiter(1, 5)
 	readonly tokenValidation: Promise<void>
 	constructor(config: ModPortalConfig) {
 		this.config = Object.freeze({
