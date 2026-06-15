@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises"
 import path from "node:path"
 import sharp from "sharp"
-import type { CompiledImageRule } from "../images"
+import type { CompiledImageRule } from "./image-rules"
 import type { FileEntry } from "#/scanner/walkDir"
 
 export type ImageFinding = {

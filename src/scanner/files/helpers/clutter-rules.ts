@@ -263,8 +263,8 @@ export async function loadClutterRules(): Promise<CompiledClutterRule[]> {
 				process.exit(1)
 			}
 			// save default rules to disk for user reference and editing
-			await mkdir(path.dirname(cfgPath), { recursive: true }).catch(() => {})
-			await writeFile(cfgPath, JSON5.stringify(DEFAULT_CLUTTER_RULES, null, 2) ?? "").catch(() => {})
+			await mkdir(path.dirname(cfgPath), { recursive: true }).catch(console.error)
+			await writeFile(cfgPath, JSON5.stringify(DEFAULT_CLUTTER_RULES, null, 2) ?? "").catch(console.error)
 			return DEFAULT_CLUTTER_RULES
 		})
 
