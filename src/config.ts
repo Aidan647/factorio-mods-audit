@@ -7,6 +7,7 @@ export type ScanConfig = {
 	disableClamAv: boolean
 	disableDiskCache: boolean
 	cacheExpiryMs: number
+	skipLoadingScanCache: boolean
 	serverPort: number
 	serverHost: string
 }
@@ -38,8 +39,9 @@ export function loadConfig(overrides?: Partial<ScanConfig>): ScanConfig {
 		disableClamAv: envBool("DISABLE_CLAMAV", false),
 		disableDiskCache: envBool("DISABLE_DISK_CACHE", false),
 		cacheExpiryMs: envNum("CACHE_EXPIRY_MS", 30 * 24 * 60 * 60 * 1000),
+		skipLoadingScanCache: envBool("SKIP_LOADING_SCAN_CACHE", false),
 		serverPort: envNum("SERVER_PORT", 8080),
-		serverHost: envStr("SERVER_HOST", "localhost"),
+		serverHost: envStr("SERVER_HOST", "0.0.0.0"),
 		...overrides,
 	}
 }

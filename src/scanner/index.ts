@@ -16,6 +16,7 @@ import { DuplicatesScanner } from "./files/duplicates"
 import { ChangelogScanner } from "./changelog"
 import walkDir from "./walkDir"
 import { MemoryCache } from "../helpers/cache"
+import { LocaleScanner } from "./locale"
 
 export class Orchestrator {
 	private readonly tmpCleanup: Promise<void | string>
@@ -45,6 +46,7 @@ export class Orchestrator {
 		ImagesScanner,
 		DuplicatesScanner,
 		ChangelogScanner,
+		LocaleScanner,
 	]
 
 	async loadIndex(): Promise<this> {
@@ -62,6 +64,32 @@ export class Orchestrator {
 			}
 		}
 		return this
+	}
+
+	async scanModFromBuffer(mod: ModListItem, buffer: Buffer): Promise<AuditReport> {
+		if (!mod.latest_release) throw new Error("No latest release found for mod: " + mod.name)
+
+		await this.loadScanners()
+		const sorter = new ReportBuilder(mod, mod.latest_release, this.cfg.reportsDir)
+
+		const modPath = await this.preflight(mod.latest_release, sorter, buffer)
+		if (!modPath) {
+			await this.cleanup(sorter)
+			return sorter.saveReport()
+		}
+
+		const scanners = this.scanners.map((Factory) => new Factory())
+
+		await getSize(path.join(modPath, ".."))
+			.then((size) => sorter.setModSize(size))
+			.catch(() => {})
+
+		await this.runScanners(modPath, sorter, scanners)
+		this.generateReport(modPath, sorter, scanners)
+
+		const report = sorter.saveReport()
+		await this.cleanup(sorter)
+		return report
 	}
 
 	async scanMod(mod: ModListItem): Promise<AuditReport> {
@@ -176,10 +204,11 @@ export class Orchestrator {
 
 	/**
 	 * Stage 1: Download, unpack, virus scan, and locate the mod folder.
+	 * If `buffer` is provided, use it directly instead of downloading.
 	 * Returns the mod folder path or null if the mod is unrecoverable.
 	 */
-	private async preflight(release: Release, sorter: ReportBuilder): Promise<string | null> {
-		const data = await this.downloadRelease(release, sorter)
+	private async preflight(release: Release, sorter: ReportBuilder, buffer?: Buffer): Promise<string | null> {
+		const data = buffer ?? (await this.downloadRelease(release, sorter))
 		if (!data) return null
 
 		const tempPath = path.join(this.cfg.tmpDir, `${sorter.modName}-${sorter.version}/`)

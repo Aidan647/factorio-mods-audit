@@ -131,10 +131,10 @@ export async function loadImageRules(): Promise<CompiledImageRule[]> {
 				}
 				process.exit(1)
 			}
+			await mkdir(path.dirname(cfgPath), { recursive: true }).catch(console.error)
+			await writeFile(cfgPath, JSON5.stringify(DEFAULT_IMAGE_RULES, null, 2) ?? "").catch(console.error)
 			return DEFAULT_IMAGE_RULES
 		})
 
-	await mkdir(path.dirname(cfgPath), { recursive: true }).catch(console.error)
-	await writeFile(cfgPath, JSON5.stringify(DEFAULT_IMAGE_RULES, null, 2) ?? "").catch(console.error)
 	return loaded.map(compileImageRule)
 }

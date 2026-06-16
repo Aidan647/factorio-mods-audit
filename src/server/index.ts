@@ -15,7 +15,7 @@ export function createServer(opts: WebSocketServerOptions) {
 
 	return Bun.serve({
 		port: opts.port,
-		hostname: opts.host ?? "localhost",
+		hostname: opts.host ?? "0.0.0.0",
 		fetch(req, server) {
 			if (server.upgrade(req)) {
 				return

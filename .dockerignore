@@ -19,3 +19,5 @@ test
 TODO.md
 coverage*
 ./data
+./test_0.1.0
+./test_0.1.0.zip

@@ -38,11 +38,13 @@ const portal = new ModPortal(portalConfig)
 await portal.tokenValidation // Ensure token is valid before accepting connections
 
 const orchestrator = new Orchestrator(portal, config)
-await orchestrator.loadIndex()
+if (!config.skipLoadingScanCache) {
+	await orchestrator.loadIndex()
+}
 await orchestrator.loadScanners()
 const server = createServer({ port, host, portal, orchestrator })
 
-console.log(`WebSocket server listening on ws://${host ?? "localhost"}:${port}/`)
+console.log(`WebSocket server listening on ws://${host ?? "0.0.0.0"}:${port}/`)
 console.log("Press Ctrl+C to stop")
 
 // Prevent the process from exiting

@@ -41,7 +41,9 @@ export async function scanSingleMod(
 	}
 
 	const scanner = new Orchestrator(portal, config)
-	await scanner.loadIndex()
+	if (!config.skipLoadingScanCache) {
+		await scanner.loadIndex()
+	}
 	await scanner.loadScanners()
 
 	console.log(`Scanning ${modInfo.title} v${latestRelease.version}...`)
