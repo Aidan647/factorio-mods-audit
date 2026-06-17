@@ -108,6 +108,7 @@ export class MessageHandler {
 		// Queue the scan — runs serially with other scans
 		const result = await this.queue.enqueue(
 			async (): Promise<{ kind: "data"; data: ScanResult } | { kind: "error"; error: Error }> => {
+				// Artificial delay to lower cpu stress
 				await Bun.sleep(500)
 				this.log(`starting scan: ${params.modName}@${versionLabel}`)
 				try {

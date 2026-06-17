@@ -132,7 +132,7 @@ export class Orchestrator {
 
 		const scanners = this.scanners.map((Factory) => new Factory())
 
-		// Measure mod size
+		// Measure mod size as walkdir may not be called
 		await getSize(path.join(modPath, "..")) // gets total size of the unzipped folder, which is more relevant for size
 			.then((size) => sorter.setModSize(size))
 			.catch(() => {})
@@ -242,6 +242,7 @@ export class Orchestrator {
 		}
 		const generator = walkDir(modPath)
 		let next = await generator.next()
+		// need to scan files sequentially to allow scanners to mark files as "skip"
 		while (!next.done) {
 			const pathEntry = next.value
 

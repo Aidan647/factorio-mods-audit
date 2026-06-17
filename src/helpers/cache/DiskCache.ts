@@ -1,7 +1,6 @@
-import { mkdir, readdir, rename, rmdir, stat, unlink } from "node:fs/promises"
+import { mkdir, readdir, rename, stat, unlink } from "node:fs/promises"
 import { basename, dirname, join } from "node:path"
 
-/** Metadata stored alongside each cached entry */
 export interface DiskCacheMeta {
 	timestamp: number
 	hash: string // wyhash hex
@@ -40,6 +39,7 @@ interface IndexEntry {
 export class DiskCache<T> {
 	private readonly index = new Map<string, IndexEntry>()
 	private pruneTimer: ReturnType<typeof setInterval> | null = null
+	private indexLoaded = false
 
 	private readonly cacheDir: string
 	private readonly extension: string
@@ -69,7 +69,7 @@ export class DiskCache<T> {
 
 	/**
 	 * Create and initialize a DiskCache instance.
-	 * Creates cache directory and repopulates index from existing .meta files.
+	 * Creates cache directory and loads index file.
 	 */
 	static async create<T>(options: DiskCacheOptions<T>): Promise<DiskCache<T>> {
 		const opts = {
@@ -87,68 +87,99 @@ export class DiskCache<T> {
 	}
 
 	private async init(): Promise<void> {
-		// Ensure cache directory exists
 		await mkdir(this.cacheDir, { recursive: true })
-
 		if (this.skipCacheLoading) return
 
-		// Recursively find all .meta files. In recursive mode, entries are
-		// relative paths like "ab/cd/{key}.meta"
-		const files: string[] = await readdir(this.cacheDir, { recursive: true }).catch(() => [])
+		// Load the consolidated index file — one read instead of N .meta files
+		await this.loadIndex().catch(() => {})
+	}
 
-		// Delete any .meta.tmp files (incomplete writes)
-		const tmpFiles = files.filter((f) => f.endsWith(".meta.tmp"))
-		await Promise.all(tmpFiles.map((f) => unlink(join(this.cacheDir, f)).catch(() => {})))
+	private indexFilePath(): string {
+		return join(this.cacheDir, "index.meta")
+	}
 
-		// Repopulate index from .meta files
-		const metaFiles = files.filter((f) => f.endsWith(".meta"))
-		const metaReads = metaFiles.map(async (f) => {
+	/**
+	 * Read the consolidated index.meta file into memory.
+	 * On first run (no index.meta), attempts one-time migration from old per-entry .meta files.
+	 */
+	private async loadIndex(): Promise<void> {
+		if (this.indexLoaded) return
+
+		const indexPath = this.indexFilePath()
+		const content = await Bun.file(indexPath)
+			.text()
+			.catch(() => null)
+
+		if (content) {
+			const parsed = JSON.parse(content) as Record<string, IndexEntry>
+			for (const [key, entry] of Object.entries(parsed)) {
+				this.index.set(key, entry)
+			}
+			this.indexLoaded = true
+			// Clean up any leftover .meta.tmp files
+			await unlink(indexPath + ".tmp").catch(() => {})
+			return
+		}
+
+		// One-time migration: look for old per-entry .meta files
+		const allFiles = await readdir(this.cacheDir, { recursive: true }).catch(() => [])
+		const metaFiles = allFiles.filter((f) => f.endsWith(".meta") && !f.endsWith(".meta.tmp"))
+
+		if (metaFiles.length === 0) {
+			this.indexLoaded = true
+			return
+		}
+
+		let migrated = 0
+		for (const f of metaFiles) {
 			const key = basename(f).slice(0, -".meta".length)
 			const metaPath = join(this.cacheDir, f)
 			const dataPath = join(dirname(metaPath), `${key}${this.extension}`)
 
-			// Check if data file exists
-			const dataExists = await stat(dataPath)
-				.then(() => true)
-				.catch(() => false)
+			const dataExists = await stat(dataPath).then(() => true).catch(() => false)
 			if (!dataExists) {
-				// Data file missing, delete orphaned meta
 				await unlink(metaPath).catch(() => {})
-				return null
+				continue
 			}
 
-			// Read and parse meta
-			const metaContent = await Bun.file(metaPath)
-				.text()
-				.catch(() => null)
-			if (!metaContent) return null
-
-			const meta = JSON.parse(metaContent) as DiskCacheMeta
-			return { key, meta }
-		})
-
-		const results = await Promise.allSettled(metaReads)
-		for (const result of results) {
-			if (result.status === "fulfilled" && result.value) {
-				const { key, meta } = result.value
-				this.index.set(key, {
-					timestamp: meta.timestamp,
-					hash: meta.hash,
-				})
+			const metaContent = await Bun.file(metaPath).text().catch(() => null)
+			if (!metaContent) {
+				await unlink(metaPath).catch(() => {})
+				continue
 			}
+
+			const meta = JSON.parse(metaContent) as { timestamp: number; hash: string }
+			this.index.set(key, { timestamp: meta.timestamp, hash: meta.hash })
+			await unlink(metaPath).catch(() => {})
+			migrated++
 		}
+
+		if (migrated > 0) {
+			console.log(`DiskCache: migrated ${migrated} entries from .meta files to index.meta`)
+			await this.saveIndex()
+		}
+
+		this.indexLoaded = true
+	}
+
+	/**
+	 * Atomically write the in-memory index to index.meta.
+	 */
+	private async saveIndex(): Promise<void> {
+		const indexPath = this.indexFilePath()
+		const tmpPath = indexPath + ".tmp"
+
+		const obj: Record<string, IndexEntry> = {}
+		for (const [key, entry] of this.index) {
+			obj[key] = entry
+		}
+
+		await Bun.write(tmpPath, JSON.stringify(obj))
+		await rename(tmpPath, indexPath)
 	}
 
 	private dataPath(key: string): string {
 		return join(this.entryDir(key), `${key}${this.extension}`)
-	}
-
-	private metaPath(key: string): string {
-		return join(this.entryDir(key), `${key}.meta`)
-	}
-
-	private metaTmpPath(key: string): string {
-		return join(this.entryDir(key), `${key}.meta.tmp`)
 	}
 
 	private computeHash(data: Buffer | string): string {
@@ -184,6 +215,7 @@ export class DiskCache<T> {
 	 * Get a cached value by key. Returns undefined if not found, expired, or corrupted.
 	 */
 	async get(key: string): Promise<T | undefined> {
+		await this.loadIndex()
 		const entry = this.index.get(key)
 		if (!entry) return undefined
 
@@ -225,44 +257,24 @@ export class DiskCache<T> {
 	}
 
 	/**
-	 * Store a value in the cache with optional etag.
-	 * Uses atomic write (.meta.tmp → .meta rename).
+	 * Store a value in the cache.
 	 * On failure, attempts to clean up and swallows error.
 	 */
 	async set(key: string, data: T): Promise<void> {
 		const dataPath = this.dataPath(key)
-		const metaPath = this.metaPath(key)
-		const metaTmpPath = this.metaTmpPath(key)
 
 		const serialized = await this.serialize(data)
 		const hash = this.computeHash(serialized)
 		const timestamp = Date.now()
 
-		const meta: DiskCacheMeta = {
-			timestamp,
-			hash,
-		}
-
 		try {
-			// Ensure entry directory exists
 			await mkdir(this.entryDir(key), { recursive: true })
-
-			// 1. Write data file
 			await Bun.write(dataPath, serialized)
 
-			// 2. Write meta to temp file
-			await Bun.write(metaTmpPath, JSON.stringify(meta))
-
-			// 3. Atomic rename
-			await rename(metaTmpPath, metaPath)
-
-			// 4. Update index
 			this.index.set(key, { timestamp, hash })
+			await this.saveIndex()
 		} catch {
-			// Clean up on failure
 			await unlink(dataPath).catch(() => {})
-			await unlink(metaTmpPath).catch(() => {})
-			await unlink(metaPath).catch(() => {})
 			this.index.delete(key)
 		}
 	}
@@ -271,6 +283,7 @@ export class DiskCache<T> {
 	 * Check if a key exists in the cache (not expired).
 	 */
 	has(key: string): boolean {
+		if (!this.indexLoaded) this.loadIndex().catch(() => {})
 		const entry = this.index.get(key)
 		if (!entry) return false
 		return Date.now() - entry.timestamp < this.expiryMs
@@ -280,6 +293,7 @@ export class DiskCache<T> {
 	 * Delete a cache entry.
 	 */
 	async delete(key: string): Promise<boolean> {
+		await this.loadIndex()
 		if (!this.index.has(key)) return false
 		await this.deleteEntry(key)
 		return true
@@ -288,33 +302,14 @@ export class DiskCache<T> {
 	private async deleteEntry(key: string): Promise<void> {
 		this.index.delete(key)
 		await unlink(this.dataPath(key)).catch(() => {})
-		await unlink(this.metaPath(key)).catch(() => {})
-		await this.cleanupEmptyDirs(key)
-	}
-
-	/**
-	 * Remove empty ancestor directories after deleting an entry.
-	 * Walks from leaf to root, stopping at the first non-empty directory.
-	 */
-	private async cleanupEmptyDirs(key: string): Promise<void> {
-		const parts = this.folderParts(key)
-		if (parts.length === 0) return
-
-		for (let depth = parts.length; depth > 0; depth--) {
-			const dir = join(this.cacheDir, ...parts.slice(0, depth))
-			const contents = await readdir(dir).catch(() => null)
-			if (contents && contents.length === 0) {
-				await rmdir(dir).catch(() => {})
-			} else {
-				break
-			}
-		}
+		await this.saveIndex()
 	}
 
 	/**
 	 * Get the timestamp for a cached entry.
 	 */
 	getTimestamp(key: string): number | undefined {
+		if (!this.indexLoaded) this.loadIndex().catch(() => {})
 		return this.index.get(key)?.timestamp
 	}
 
@@ -322,24 +317,12 @@ export class DiskCache<T> {
 	 * Update timestamp without rewriting data (e.g., on 304 response).
 	 */
 	async touch(key: string): Promise<void> {
+		await this.loadIndex()
 		const entry = this.index.get(key)
 		if (!entry) return
 
-		const timestamp = Date.now()
-		entry.timestamp = timestamp
-
-		// Update meta file atomically
-		const meta: DiskCacheMeta = {
-			timestamp,
-			hash: entry.hash,
-		}
-
-		const metaPath = this.metaPath(key)
-		const metaTmpPath = this.metaTmpPath(key)
-
-		await Bun.write(metaTmpPath, JSON.stringify(meta))
-			.then(() => rename(metaTmpPath, metaPath))
-			.catch(() => unlink(metaTmpPath).catch(() => {}))
+		entry.timestamp = Date.now()
+		await this.saveIndex()
 	}
 
 	/**
@@ -347,6 +330,7 @@ export class DiskCache<T> {
 	 * Returns number of entries pruned.
 	 */
 	async prune(maxAgeMs?: number): Promise<number> {
+		await this.loadIndex()
 		const threshold = maxAgeMs ?? this.expiryMs
 		const now = Date.now()
 		const keysToDelete: string[] = []
@@ -365,6 +349,7 @@ export class DiskCache<T> {
 	 * Get all cache keys.
 	 */
 	keys(): IterableIterator<string> {
+		if (!this.indexLoaded) this.loadIndex().catch(() => {})
 		return this.index.keys()
 	}
 
@@ -372,6 +357,7 @@ export class DiskCache<T> {
 	 * Get all cache entries (key → metadata).
 	 */
 	entries(): IterableIterator<[string, IndexEntry]> {
+		if (!this.indexLoaded) this.loadIndex().catch(() => {})
 		return this.index.entries()
 	}
 
@@ -379,6 +365,7 @@ export class DiskCache<T> {
 	 * Get number of entries in cache.
 	 */
 	size(): number {
+		if (!this.indexLoaded) this.loadIndex().catch(() => {})
 		return this.index.size
 	}
 
