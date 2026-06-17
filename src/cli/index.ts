@@ -57,7 +57,8 @@ export async function scanSingleMod(
 			console.log(JSON.stringify(report, null, "\t"))
 			break
 	}
-
+	scanner.reportCache.destroy()
+	await scanner.reportCache.saveAwaiter
 	return report
 }
 
@@ -138,5 +139,7 @@ export async function scanTopMods(
 	console.log(`  Average score: ${avgScore.toFixed(1)} / 100`)
 	console.log("")
 
+	scanner.reportCache.destroy()
+	await scanner.reportCache.saveAwaiter
 	return reports
 }

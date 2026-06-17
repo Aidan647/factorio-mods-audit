@@ -22,7 +22,7 @@ export class Orchestrator {
 
 	private constructor(
 		readonly portal: ModPortal,
-		private readonly reportCache: MixedCache<AuditReport>,
+		readonly reportCache: MixedCache<AuditReport>,
 		private readonly cfg: ScanConfig,
 	) {
 		// Clean tmp dir on construction
@@ -40,7 +40,7 @@ export class Orchestrator {
 			memoryExpiryMs: 24 * 60 * 60 * 1000, // 1d
 			diskExpiryMs: 31 * 24 * 60 * 60 * 1000, // 31d
 			cacheDir: cfg.reportsDir,
-			extension: ".zst",
+			extension: ".json.zst",
 			minMemorySize: 200,
 			maxMemoryMB: 550,
 			deserialize: async (data) => {

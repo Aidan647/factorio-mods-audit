@@ -43,6 +43,7 @@ export class DiskCache<T> {
 	private saveQueued = false
 
 	private readonly cacheDir: string
+	private readonly indexFilePath: string
 	private readonly extension: string
 	private readonly expiryMs: number
 	private readonly splitFolders: number[]
@@ -62,6 +63,8 @@ export class DiskCache<T> {
 		this.serialize = options.serialize
 		this.deserialize = options.deserialize
 		this.verifyOnRead = options.verifyOnRead
+
+		this.indexFilePath = join(this.cacheDir, "index.meta")
 
 		if (options.pruneIntervalMs) {
 			this.pruneTimer = setInterval(() => this.prune(), options.pruneIntervalMs)
@@ -93,10 +96,6 @@ export class DiskCache<T> {
 		await this.loadIndex()
 	}
 
-	private indexFilePath(): string {
-		return join(this.cacheDir, "index.meta")
-	}
-
 	/**
 	 * Read the consolidated index.meta file into memory.
 	 * On first run (no index.meta), attempts one-time migration from old per-entry .meta files.
@@ -104,8 +103,7 @@ export class DiskCache<T> {
 	private async loadIndex(): Promise<void> {
 		if (this.skipCacheLoading) return
 
-		const indexPath = this.indexFilePath()
-		const content = await Bun.file(indexPath)
+		const content = await Bun.file(this.indexFilePath)
 			.text()
 			.catch(() => null)
 
@@ -115,49 +113,24 @@ export class DiskCache<T> {
 				this.index.set(key, entry)
 			}
 			// Clean up any leftover .meta.tmp files
-			await unlink(indexPath + ".tmp").catch(() => {})
-			return
-		}
+			await unlink(this.indexFilePath + ".tmp").catch(() => {})
 
-		// One-time migration: look for old per-entry .meta files
-		const allFiles = await readdir(this.cacheDir, { recursive: true }).catch(() => [])
-		const metaFiles = allFiles.filter((f) => f.endsWith(".meta") && !f.endsWith(".meta.tmp"))
+			// also scan for any files in the cache dir that aren't in the index and remove them
+			const allFiles = await readdir(this.cacheDir, { recursive: true }).catch(() => [])
+			for (const f of allFiles) {
+				if (f.endsWith(".meta") || f.endsWith(".meta.tmp")) {
+					if (f === "index.meta") continue
+					await unlink(join(this.cacheDir, f)).catch(() => {})
+					continue
+				}
+				if (!f.endsWith(this.extension)) continue
+				const key = basename(f, this.extension)
 
-		if (metaFiles.length === 0) {
-			return
-		}
-
-		let migrated = 0
-		for (const f of metaFiles) {
-			const key = basename(f).slice(0, -".meta".length)
-			const metaPath = join(this.cacheDir, f)
-			const dataPath = join(dirname(metaPath), `${key}${this.extension}`)
-
-			const dataExists = await stat(dataPath)
-				.then(() => true)
-				.catch(() => false)
-			if (!dataExists) {
-				await unlink(metaPath).catch(() => {})
-				continue
+				if (!this.index.has(key)) {
+					await unlink(join(this.cacheDir, f)).catch(() => {})
+				}
 			}
-
-			const metaContent = await Bun.file(metaPath)
-				.text()
-				.catch(() => null)
-			if (!metaContent) {
-				await unlink(metaPath).catch(() => {})
-				continue
-			}
-
-			const meta = JSON.parse(metaContent) as { timestamp: number; hash: string }
-			this.index.set(key, { timestamp: meta.timestamp, hash: meta.hash })
-			await unlink(metaPath).catch(() => {})
-			migrated++
-		}
-
-		if (migrated > 0) {
-			console.log(`DiskCache: migrated ${migrated} entries from .meta files to index.meta`)
-			await this.writeIndex()
+			return
 		}
 	}
 
@@ -176,11 +149,10 @@ export class DiskCache<T> {
 			this.saveQueued = true
 		}
 	}
-
+	get saveAwaiter(): Promise<void> {
+		return this.saveChain ?? Promise.resolve()
+	}
 	private async writeIndex(): Promise<void> {
-		const indexPath = this.indexFilePath()
-		const tmpPath = indexPath + ".tmp"
-
 		await Bun.sleep(50) // Artificial delay to batch multiple rapid updates
 		this.saveQueued = false // safe because the data snapshot is captured below
 
@@ -189,8 +161,9 @@ export class DiskCache<T> {
 			obj[key] = entry
 		}
 
+		const tmpPath = this.indexFilePath + ".tmp"
 		await Bun.write(tmpPath, JSON.stringify(obj))
-		await rename(tmpPath, indexPath)
+		await rename(tmpPath, this.indexFilePath)
 
 		this.saveChain = null
 		if (this.saveQueued) {
@@ -210,16 +183,16 @@ export class DiskCache<T> {
 	/**
 	 * Compute subdirectory path parts from the key hash.
 	 * Each element of splitFolders consumes that many hex chars.
-	 * E.g. [2, 2] with hash "c2939582..." → ["c2", "93"]
+	 * E.g. [2, 2] with key "c2939582..." → ["c2", "93"]
 	 */
 	private folderParts(key: string): string[] {
 		if (this.splitFolders.length === 0) return []
-		const hashHex = Bun.hash(key).toString(16)
 		const parts: string[] = []
-		let offset = 0
-		for (const len of this.splitFolders) {
-			parts.push(hashHex.slice(offset, offset + len))
-			offset += len
+		let index = 0
+		for (const length of this.splitFolders) {
+			if (index + length > key.length) break
+			parts.push(key.slice(index, index + length))
+			index += length
 		}
 		return parts
 	}
@@ -251,7 +224,7 @@ export class DiskCache<T> {
 		const exists = await file.exists()
 		if (!exists) {
 			// Data file missing, clean up
-			await this.deleteEntry(key)
+			this.deleteEntry(key)
 			return undefined
 		}
 
@@ -263,14 +236,14 @@ export class DiskCache<T> {
 			if (computedHash !== entry.hash) {
 				// Hash mismatch, corrupted data
 				console.warn(`DiskCache: hash mismatch for key "${key}", deleting corrupted entry`)
-				await this.deleteEntry(key)
+				this.deleteEntry(key)
 				return undefined
 			}
 		}
 		const deserialized = await this.deserialize(raw)
 		if (deserialized === undefined) {
 			// Deserialization failed, treat as corrupted
-			await this.deleteEntry(key)
+			this.deleteEntry(key)
 			return undefined
 		}
 		return deserialized satisfies T
@@ -292,11 +265,11 @@ export class DiskCache<T> {
 			await Bun.write(dataPath, serialized)
 
 			this.index.set(key, { timestamp, hash })
-			this.saveIndex()
 		} catch {
 			await unlink(dataPath).catch(() => {})
 			this.index.delete(key)
 		}
+		this.saveIndex()
 	}
 
 	/**
@@ -305,22 +278,27 @@ export class DiskCache<T> {
 	has(key: string): boolean {
 		const entry = this.index.get(key)
 		if (!entry) return false
-		return Date.now() - entry.timestamp < this.expiryMs
+
+		if (Date.now() - entry.timestamp >= this.expiryMs) {
+			return false
+		}
+		return true
 	}
 
 	/**
 	 * Delete a cache entry.
 	 */
-	async delete(key: string): Promise<boolean> {
+	delete(key: string): boolean {
 		if (!this.index.has(key)) return false
-		await this.deleteEntry(key)
+		this.deleteEntry(key)
 		return true
 	}
 
-	private async deleteEntry(key: string): Promise<void> {
-		this.index.delete(key)
-		await unlink(this.dataPath(key)).catch(() => {})
+	private deleteEntry(key: string): void {
+		const removed = this.index.delete(key)
+		if (!removed) return
 		this.saveIndex()
+		unlink(this.dataPath(key)).catch(() => {})
 	}
 
 	/**
@@ -356,7 +334,9 @@ export class DiskCache<T> {
 			}
 		}
 
-		await Promise.all(keysToDelete.map((key) => this.deleteEntry(key)))
+		for (const key of keysToDelete) {
+			this.deleteEntry(key)
+		}
 		return keysToDelete.length
 	}
 

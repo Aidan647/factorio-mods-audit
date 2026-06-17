@@ -520,6 +520,10 @@ export class MixedCache<T> {
 		return this.currentMaxSize
 	}
 
+	get saveAwaiter(): Promise<void> {
+		return this.l2.saveAwaiter
+	}
+
 	/**
 	 * Stop all schedulers, remove signal handlers, and clean up.
 	 */
