@@ -24,7 +24,7 @@ const baseModInfo = z.object({
 
 export const ModInfo = baseModInfo.extend({
 	releases: z.array(Release),
-	thumbnail: z.string(),
+	thumbnail: z.string().optional(),
 })
 
 export type ModInfo = z.infer<typeof ModInfo>
