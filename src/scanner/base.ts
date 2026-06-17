@@ -25,7 +25,6 @@ export interface Scanner {
 	readonly minimumImpact?: number
 	readonly findings: Finding[]
 
-
 	scan?(modPath: string, sorter: ReportBuilder): Promise<void>
 
 	report(modPath: string, sorter: ReportBuilder): ScannerResult

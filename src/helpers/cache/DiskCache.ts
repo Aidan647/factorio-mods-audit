@@ -1,10 +1,9 @@
-import { mkdir, readdir, rename, stat, unlink } from "node:fs/promises"
-import { join } from "node:path"
+import { mkdir, readdir, rename, rmdir, stat, unlink } from "node:fs/promises"
+import { basename, dirname, join } from "node:path"
 
 /** Metadata stored alongside each cached entry */
 export interface DiskCacheMeta {
 	timestamp: number
-	etag: string | null
 	hash: string // wyhash hex
 }
 
@@ -16,18 +15,21 @@ export interface DiskCacheOptions<T> {
 	/** Cache expiry in milliseconds */
 	expiryMs: number
 	/** Serialize data to Buffer/string for disk. Default: identity (assumes T is Buffer | string) */
-	serialize?: (data: T) => Buffer | string
-	/** Deserialize Buffer from disk to T. Default: identity (returns Buffer as T) */
-	deserialize?: (raw: Buffer) => T
+	serialize?: (data: T) => Buffer | string | Promise<Buffer | string>
+	/** Deserialize Buffer from disk to T. return undefined if invalid */
+	deserialize?: (raw: Buffer) => T | undefined | Promise<T | undefined>
 	/** Verify hash on read. Default: true */
 	verifyOnRead?: boolean
+	/** Number of hex chars per nesting level for subdirectory splitting. E.g. [2,2] → ab/cd/{key}.ext */
+	splitFolders?: number[]
+	/** Skip loading existing cache entries from disk on init. Default: false */
+	skipCacheLoading?: boolean
 	/** Auto-prune interval in milliseconds. If set, starts prune scheduler */
 	pruneIntervalMs?: number
 }
 
 interface IndexEntry {
 	timestamp: number
-	etag: string | null
 	hash: string
 }
 
@@ -42,8 +44,10 @@ export class DiskCache<T> {
 	private readonly cacheDir: string
 	private readonly extension: string
 	private readonly expiryMs: number
-	private readonly serialize: (data: T) => Buffer | string
-	private readonly deserialize: (raw: Buffer) => T
+	private readonly splitFolders: number[]
+	private readonly skipCacheLoading: boolean
+	private readonly serialize: (data: T) => Buffer | string | Promise<Buffer | string>
+	private readonly deserialize: (raw: Buffer) => T | undefined | Promise<T | undefined>
 	private readonly verifyOnRead: boolean
 
 	private constructor(
@@ -52,6 +56,8 @@ export class DiskCache<T> {
 		this.cacheDir = options.cacheDir
 		this.extension = options.extension
 		this.expiryMs = options.expiryMs
+		this.splitFolders = options.splitFolders
+		this.skipCacheLoading = options.skipCacheLoading
 		this.serialize = options.serialize
 		this.deserialize = options.deserialize
 		this.verifyOnRead = options.verifyOnRead
@@ -71,6 +77,8 @@ export class DiskCache<T> {
 			serialize: options.serialize ?? ((data: T) => data as Buffer | string),
 			deserialize: options.deserialize ?? ((raw: Buffer) => raw as T),
 			verifyOnRead: options.verifyOnRead ?? true,
+			splitFolders: options.splitFolders ?? [],
+			skipCacheLoading: options.skipCacheLoading ?? false,
 		}
 
 		const instance = new DiskCache<T>(opts)
@@ -82,8 +90,11 @@ export class DiskCache<T> {
 		// Ensure cache directory exists
 		await mkdir(this.cacheDir, { recursive: true })
 
-		// Read directory and process files
-		const files = await readdir(this.cacheDir).catch(() => [])
+		if (this.skipCacheLoading) return
+
+		// Recursively find all .meta files. In recursive mode, entries are
+		// relative paths like "ab/cd/{key}.meta"
+		const files: string[] = await readdir(this.cacheDir, { recursive: true }).catch(() => [])
 
 		// Delete any .meta.tmp files (incomplete writes)
 		const tmpFiles = files.filter((f) => f.endsWith(".meta.tmp"))
@@ -92,9 +103,9 @@ export class DiskCache<T> {
 		// Repopulate index from .meta files
 		const metaFiles = files.filter((f) => f.endsWith(".meta"))
 		const metaReads = metaFiles.map(async (f) => {
-			const key = f.slice(0, -".meta".length)
+			const key = basename(f).slice(0, -".meta".length)
 			const metaPath = join(this.cacheDir, f)
-			const dataPath = join(this.cacheDir, `${key}${this.extension}`)
+			const dataPath = join(dirname(metaPath), `${key}${this.extension}`)
 
 			// Check if data file exists
 			const dataExists = await stat(dataPath)
@@ -122,7 +133,6 @@ export class DiskCache<T> {
 				const { key, meta } = result.value
 				this.index.set(key, {
 					timestamp: meta.timestamp,
-					etag: meta.etag,
 					hash: meta.hash,
 				})
 			}
@@ -130,19 +140,44 @@ export class DiskCache<T> {
 	}
 
 	private dataPath(key: string): string {
-		return join(this.cacheDir, `${key}${this.extension}`)
+		return join(this.entryDir(key), `${key}${this.extension}`)
 	}
 
 	private metaPath(key: string): string {
-		return join(this.cacheDir, `${key}.meta`)
+		return join(this.entryDir(key), `${key}.meta`)
 	}
 
 	private metaTmpPath(key: string): string {
-		return join(this.cacheDir, `${key}.meta.tmp`)
+		return join(this.entryDir(key), `${key}.meta.tmp`)
 	}
 
 	private computeHash(data: Buffer | string): string {
 		return Bun.hash(data).toString(16)
+	}
+
+	/**
+	 * Compute subdirectory path parts from the key hash.
+	 * Each element of splitFolders consumes that many hex chars.
+	 * E.g. [2, 2] with hash "c2939582..." → ["c2", "93"]
+	 */
+	private folderParts(key: string): string[] {
+		if (this.splitFolders.length === 0) return []
+		const hashHex = Bun.hash(key).toString(16)
+		const parts: string[] = []
+		let offset = 0
+		for (const len of this.splitFolders) {
+			parts.push(hashHex.slice(offset, offset + len))
+			offset += len
+		}
+		return parts
+	}
+
+	/**
+	 * Get the directory path for a given key, creating subdirectories as configured.
+	 */
+	private entryDir(key: string): string {
+		const parts = this.folderParts(key)
+		return parts.length > 0 ? join(this.cacheDir, ...parts) : this.cacheDir
 	}
 
 	/**
@@ -180,8 +215,13 @@ export class DiskCache<T> {
 				return undefined
 			}
 		}
-
-		return this.deserialize(raw)
+		const deserialized = await this.deserialize(raw)
+		if (deserialized === undefined) {
+			// Deserialization failed, treat as corrupted
+			await this.deleteEntry(key)
+			return undefined
+		}
+		return deserialized satisfies T
 	}
 
 	/**
@@ -189,22 +229,24 @@ export class DiskCache<T> {
 	 * Uses atomic write (.meta.tmp → .meta rename).
 	 * On failure, attempts to clean up and swallows error.
 	 */
-	async set(key: string, data: T, etag?: string): Promise<void> {
+	async set(key: string, data: T): Promise<void> {
 		const dataPath = this.dataPath(key)
 		const metaPath = this.metaPath(key)
 		const metaTmpPath = this.metaTmpPath(key)
 
-		const serialized = this.serialize(data)
+		const serialized = await this.serialize(data)
 		const hash = this.computeHash(serialized)
 		const timestamp = Date.now()
 
 		const meta: DiskCacheMeta = {
 			timestamp,
-			etag: etag ?? null,
 			hash,
 		}
 
 		try {
+			// Ensure entry directory exists
+			await mkdir(this.entryDir(key), { recursive: true })
+
 			// 1. Write data file
 			await Bun.write(dataPath, serialized)
 
@@ -215,7 +257,7 @@ export class DiskCache<T> {
 			await rename(metaTmpPath, metaPath)
 
 			// 4. Update index
-			this.index.set(key, { timestamp, etag: etag ?? null, hash })
+			this.index.set(key, { timestamp, hash })
 		} catch {
 			// Clean up on failure
 			await unlink(dataPath).catch(() => {})
@@ -247,13 +289,26 @@ export class DiskCache<T> {
 		this.index.delete(key)
 		await unlink(this.dataPath(key)).catch(() => {})
 		await unlink(this.metaPath(key)).catch(() => {})
+		await this.cleanupEmptyDirs(key)
 	}
 
 	/**
-	 * Get the etag for a cached entry.
+	 * Remove empty ancestor directories after deleting an entry.
+	 * Walks from leaf to root, stopping at the first non-empty directory.
 	 */
-	getEtag(key: string): string | null {
-		return this.index.get(key)?.etag ?? null
+	private async cleanupEmptyDirs(key: string): Promise<void> {
+		const parts = this.folderParts(key)
+		if (parts.length === 0) return
+
+		for (let depth = parts.length; depth > 0; depth--) {
+			const dir = join(this.cacheDir, ...parts.slice(0, depth))
+			const contents = await readdir(dir).catch(() => null)
+			if (contents && contents.length === 0) {
+				await rmdir(dir).catch(() => {})
+			} else {
+				break
+			}
+		}
 	}
 
 	/**
@@ -276,7 +331,6 @@ export class DiskCache<T> {
 		// Update meta file atomically
 		const meta: DiskCacheMeta = {
 			timestamp,
-			etag: entry.etag,
 			hash: entry.hash,
 		}
 

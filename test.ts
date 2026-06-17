@@ -1,7 +1,7 @@
 import { SUPPORTED_LOCALES } from "#/scanner/helpers/locale"
 import { Glob } from "bun"
 
-const matchers: Record<string, { matcher: Glob; matcherException: Glob}> = {
+const matchers: Record<string, { matcher: Glob; matcherException: Glob }> = {
 	invalidFolder: {
 		matcher: new Glob("locale/*"),
 		matcherException: new Glob(`locale/{${Object.keys(SUPPORTED_LOCALES).join(",")}}`),

@@ -25,4 +25,3 @@ export class Rules<T> implements Iterable<T> {
 	}
 }
 export default Rules
-

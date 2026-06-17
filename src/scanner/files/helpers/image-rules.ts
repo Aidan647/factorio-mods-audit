@@ -64,8 +64,6 @@ const DEFAULT_IMAGE_RULES: ImageRule[] = [
 ]
 type SizeInput = number | { width: number; height: number }
 
-
-
 const ImageRule = z.object({
 	type: z.string(),
 	description: z.string(),
@@ -77,7 +75,6 @@ const ImageRule = z.object({
 	maxMipmaps: z.number().optional(),
 })
 type ImageRule = z.infer<typeof ImageRule>
-
 
 export type CompiledImageRule = {
 	type: string
@@ -110,7 +107,6 @@ function compileImageRule(rule: ImageRule): CompiledImageRule {
 		maxMipmaps: rule.maxMipmaps ?? 0,
 	} satisfies CompiledImageRule
 }
-
 
 export async function loadImageRules(): Promise<CompiledImageRule[]> {
 	const cfgPath = process.env.IMAGE_RULES_PATH || path.join(process.cwd(), "data/image-rules.json5")

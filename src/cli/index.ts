@@ -7,8 +7,6 @@ import type { AuditReport } from "#/report"
 import { formatTxt, formatMd, formatHtml } from "#/report/formatters"
 import { bytesToHuman, numberToHuman } from "#/helpers/humanify"
 
-
-
 export async function scanSingleMod(
 	modName: string,
 	config: ScanConfig = loadConfig(),
@@ -40,11 +38,7 @@ export async function scanSingleMod(
 		latest_release: latestRelease,
 	}
 
-	const scanner = new Orchestrator(portal, config)
-	if (!config.skipLoadingScanCache) {
-		await scanner.loadIndex()
-	}
-	await scanner.loadScanners()
+	const scanner = await Orchestrator.create(portal, config)
 
 	console.log(`Scanning ${modInfo.title} v${latestRelease.version}...`)
 	const report = await scanner.scanMod(modListItem)

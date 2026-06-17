@@ -5,10 +5,6 @@ import type { PathEntry } from "../walkDir"
 import { loadImageRules, type CompiledImageRule } from "./helpers/image-rules"
 import { Rules } from "./helpers/rules"
 
-
-
-
-
 export class ImagesScanner implements Scanner {
 	readonly id = "images"
 	readonly weight = 60

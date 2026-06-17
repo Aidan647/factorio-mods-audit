@@ -90,8 +90,7 @@ const modListItem: ModListItem = {
 // ── Scan ────────────────────────────────────────────────────────────────────
 
 const portal = new ModPortal({} as any)
-const scanner = new Orchestrator(portal, cfg)
-await scanner.loadScanners()
+const scanner = await Orchestrator.create(portal, cfg)
 
 const report = await scanner.scanModFromBuffer(modListItem, zipBuffer)
 

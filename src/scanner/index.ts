@@ -3,7 +3,6 @@ import fs from "fs/promises"
 import type { ModPortal } from "../modportal"
 import type { ModListItem, Release } from "../modportal/types"
 import { ReportBuilder, type AuditReport, SCANNER_VERSION } from "../report"
-import { saveReportToDisk } from "../report/save"
 import path from "path"
 import { scanFile, Verdict } from "../helpers/scanfile"
 import { findModFolder, MetadataScanner } from "./metadata"
@@ -15,31 +14,59 @@ import { loadConfig, type ScanConfig } from "../config"
 import { DuplicatesScanner } from "./files/duplicates"
 import { ChangelogScanner } from "./changelog"
 import walkDir from "./walkDir"
-import { MemoryCache } from "../helpers/cache"
+import { MixedCache } from "../helpers/cache"
 import { LocaleScanner } from "./locale"
 
 export class Orchestrator {
 	private readonly tmpCleanup: Promise<void | string>
-	private readonly reportCache: MemoryCache<AuditReport>
-	constructor(
+
+	private constructor(
 		readonly portal: ModPortal,
-		private readonly cfg: ScanConfig = loadConfig(),
+		private readonly reportCache: MixedCache<AuditReport>,
+		private readonly cfg: ScanConfig,
 	) {
 		// Clean tmp dir on construction
 		this.tmpCleanup = fs
 			.rm(this.cfg.tmpDir, { recursive: true, force: true })
 			.then(() => fs.mkdir(this.cfg.tmpDir, { recursive: true }))
 			.catch(() => undefined)
-		this.index = new ScanIndex(this.cfg.indexPath)
-		this.reportCache = new MemoryCache<AuditReport>({
-			expiryMs: 300 * 60 * 1000, // 5h
-			maxSize: 500,
-			checkIntervalMs: 5 * 60 * 1000, // 5m
-			maxMemoryMB: 500,
-		})
 	}
 
-	private readonly index: ScanIndex
+	/**
+	 * Create an Orchestrator instance with async initialization.
+	 */
+	static async create(portal: ModPortal, cfg: ScanConfig = loadConfig()): Promise<Orchestrator> {
+		const reportCache = await MixedCache.create<AuditReport>({
+			memoryExpiryMs: 24 * 60 * 60 * 1000, // 1d
+			diskExpiryMs: 31 * 24 * 60 * 60 * 1000, // 31d
+			cacheDir: cfg.reportsDir,
+			extension: ".zst",
+			minMemorySize: 200,
+			maxMemoryMB: 550,
+			deserialize: async (data) => {
+				try {
+					const report = JSON.parse((await Bun.zstdDecompress(data)).toString()) as AuditReport
+					if (report.scannerVersion !== SCANNER_VERSION) return undefined
+					if (report.errors && report.errors.length > 0) return undefined
+					return report
+				} catch {
+					return undefined
+				}
+			},
+			serialize: (report) => Bun.zstdCompress(JSON.stringify(report), { level: 5 }),
+			diskPruneIntervalMs: 24 * 60 * 60 * 1000, // 24h
+			memoryPruneIntervalMs: 30 * 60 * 1000, // 30min
+			memoryCheckIntervalMs: 10 * 1000, // 10s
+			splitFolders: [2],
+			verifyOnRead: true,
+			writePolicy: "through",
+			skipCacheLoading: cfg.skipLoadingScanCache,
+		})
+		const orchestrator = new Orchestrator(portal, reportCache, cfg)
+		await orchestrator.loadScanners()
+		return orchestrator
+	}
+
 	private scanners: ScannerFactory[] = [
 		ClutterScanner,
 		MetadataScanner,
@@ -49,12 +76,7 @@ export class Orchestrator {
 		LocaleScanner,
 	]
 
-	async loadIndex(): Promise<this> {
-		await this.index.load()
-		return this
-	}
-
-	async loadScanners(): Promise<this> {
+	private async loadScanners(): Promise<this> {
 		for (const factory of this.scanners) {
 			if (factory.loaded) continue
 			if (factory.load) await factory.load()
@@ -94,7 +116,7 @@ export class Orchestrator {
 
 	async scanMod(mod: ModListItem): Promise<AuditReport> {
 		if (!mod.latest_release) throw new Error("No latest release found for mod: " + mod.name)
-		const cached = await this.loadCachedReport(mod.latest_release.sha1)
+		const cached = await this.reportCache.get(mod.latest_release.sha1)
 		if (cached) return cached
 
 		await this.loadScanners()
@@ -123,29 +145,6 @@ export class Orchestrator {
 		const report = await this.save(sorter)
 		await this.cleanup(sorter)
 		return report
-	}
-
-	/** Try to load a previously-saved report from memory cache or disk. */
-	private async loadCachedReport(sha1: string): Promise<AuditReport | null> {
-		const cached = this.reportCache.get(sha1)
-		if (cached) return cached
-
-		const entry = this.index.get(sha1)
-		if (!entry) return null
-
-		return fs
-			.readFile(entry.reportPath, "utf-8")
-			.then((raw) => {
-				const report = JSON.parse(raw) as AuditReport
-				if (report.scannerVersion !== SCANNER_VERSION) return null
-				if (report.errors && report.errors.length > 0) {
-					this.index.delete(sha1)
-					return null
-				}
-				this.reportCache.set(sha1, report)
-				return report
-			})
-			.catch(() => null)
 	}
 
 	/** Download a release, returning the raw buffer or null on failure. */
@@ -276,16 +275,7 @@ export class Orchestrator {
 
 	async save(sorter: ReportBuilder): Promise<AuditReport> {
 		const report = sorter.saveReport()
-		const reportPath = await saveReportToDisk(report, this.cfg.reportsDir).catch((err) =>
-			console.log("Failed to save report to disk:", err),
-		)
-		if (reportPath) {
-			this.reportCache.set(report.sha1, report)
-			if (!report.errors || report.errors.length === 0) {
-				this.index.set(report.sha1, { reportPath, scannedAt: new Date().toISOString() })
-				await this.index.save().catch((err) => console.log("Failed to save scan index:", err))
-			}
-		}
+		this.reportCache.set(report.sha1, report)
 		return report
 	}
 

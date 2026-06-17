@@ -7,7 +7,6 @@ export interface MixedCacheStats {
 	l1Misses: number
 	l2Hits: number
 	l2Misses: number
-	etagHits: number
 	serverFetches: number
 	l1Size: number
 	l2Size: number
@@ -17,29 +16,32 @@ export interface MixedCacheStats {
 
 /** Full metadata for stale entries that can be revalidated */
 export interface StaleMetadata {
-	etag: string
 	timestamp: number
 	hash: string
 }
 
-export interface MixedCacheOptions<T> {
+	export interface MixedCacheOptions<T> {
 	/** Directory to store cache files */
 	cacheDir: string
 	/** File extension for data files (e.g., ".png", ".json") */
 	extension: string
 	/** Serialize data to Buffer/string for disk. Default: identity (assumes T is Buffer | string) */
-	serialize?: (data: T) => Buffer | string
+	serialize?: (data: T) => Buffer | string | Promise<Buffer | string>
 	/** Deserialize Buffer from disk to T. Default: identity (returns Buffer as T) */
-	deserialize?: (raw: Buffer) => T
+	deserialize?: (raw: Buffer) => T | undefined | Promise<T | undefined>
 	/** Verify hash on disk read. Default: true */
 	verifyOnRead?: boolean
+
+	/** Number of hex chars per nesting level for subdirectory splitting. E.g. [2,2] → ab/cd/{key}.ext */
+	splitFolders?: number[]
+
+	/** Skip loading L2 entries into L1 on init (start with empty L1). Default: false */
+	skipCacheLoading?: boolean
 
 	/** L1 (memory) cache expiry in milliseconds - used for prune scheduling */
 	memoryExpiryMs: number
 	/** L2 (disk) cache expiry in milliseconds - determines when entries are stale */
 	diskExpiryMs: number
-	/** Maximum age for stale entries to keep for etag revalidation. Default: 7 days */
-	maxStaleAgeMs?: number
 
 	/** Minimum guaranteed L1 size (entries). Used to calculate step size. */
 	minMemorySize: number
@@ -59,11 +61,6 @@ export interface MixedCacheOptions<T> {
 	flushTimeoutMs?: number
 }
 
-/** Entry tracking dirty state with etag for write-back mode */
-interface DirtyEntry {
-	etag: string | undefined
-}
-
 /** Absolute maximum L1 size cap */
 const ABSOLUTE_MAX_SIZE = 8192
 
@@ -71,8 +68,6 @@ const ABSOLUTE_MAX_SIZE = 8192
  * Two-level cache with L1 (memory) and L2 (disk) layers.
  * Features:
  * - Dynamic L1 sizing based on RSS memory pressure
- * - Write-through or write-back policies with etag preservation
- * - Stale entry support for conditional request revalidation
  * - Batch operations for efficient multi-key access
  * - Graceful shutdown with dirty entry flushing
  *
@@ -81,7 +76,7 @@ const ABSOLUTE_MAX_SIZE = 8192
 export class MixedCache<T> {
 	private readonly l1: MemoryCache<T>
 	private readonly l2: DiskCache<T>
-	private readonly dirty = new Map<string, DirtyEntry>()
+	private readonly dirty = new Set<string>()
 
 	private memoryCheckTimer: ReturnType<typeof setInterval> | null = null
 	private l1PruneTimer: ReturnType<typeof setInterval> | null = null
@@ -91,12 +86,12 @@ export class MixedCache<T> {
 
 	private readonly memoryExpiryMs: number
 	private readonly diskExpiryMs: number
-	private readonly maxStaleAgeMs: number
 	private readonly minMemorySize: number
 	private readonly maxMemoryMB: number
 	private readonly stepSize: number
 	private readonly writePolicy: "through" | "back"
 	private readonly flushTimeoutMs: number
+	private readonly skipCacheLoading: boolean
 
 	private currentMaxSize: number
 
@@ -106,7 +101,6 @@ export class MixedCache<T> {
 		l1Misses: 0,
 		l2Hits: 0,
 		l2Misses: 0,
-		etagHits: 0,
 		serverFetches: 0,
 	}
 
@@ -116,14 +110,22 @@ export class MixedCache<T> {
 		options: Required<
 			Omit<
 				MixedCacheOptions<T>,
-				"serialize" | "deserialize" | "verifyOnRead" | "memoryPruneIntervalMs" | "diskPruneIntervalMs"
+				| "serialize"
+				| "deserialize"
+				| "verifyOnRead"
+				| "memoryPruneIntervalMs"
+				| "diskPruneIntervalMs"
+				| "splitFolders"
+				| "skipCacheLoading"
 			>
 		> & {
-			serialize?: (data: T) => Buffer | string
-			deserialize?: (raw: Buffer) => T
+			serialize?: (data: T) => Buffer | string | Promise<Buffer | string>
+			deserialize?: (raw: Buffer) => T | undefined | Promise<T | undefined>
 			verifyOnRead?: boolean
 			memoryPruneIntervalMs?: number
 			diskPruneIntervalMs?: number
+			splitFolders?: number[]
+			skipCacheLoading?: boolean
 		},
 	) {
 		this.l1 = l1
@@ -131,14 +133,14 @@ export class MixedCache<T> {
 
 		this.memoryExpiryMs = options.memoryExpiryMs
 		this.diskExpiryMs = options.diskExpiryMs
-		this.maxStaleAgeMs = options.maxStaleAgeMs
 		this.minMemorySize = options.minMemorySize
 		this.maxMemoryMB = options.maxMemoryMB
 		this.writePolicy = options.writePolicy
 		this.flushTimeoutMs = options.flushTimeoutMs
+		this.skipCacheLoading = options.skipCacheLoading ?? false
 
-		// Calculate step size: 15% of minSize, minimum 10
-		this.stepSize = Math.max(10, Math.floor(this.minMemorySize * 0.15))
+		// Calculate step size: 20% of minSize, minimum 10
+		this.stepSize = Math.max(10, Math.floor(this.minMemorySize * 0.2))
 
 		// Initialize currentMaxSize: minSize + 1 step, capped at absolute max
 		this.currentMaxSize = Math.min(this.minMemorySize + this.stepSize, ABSOLUTE_MAX_SIZE)
@@ -171,20 +173,23 @@ export class MixedCache<T> {
 	static async create<T>(options: MixedCacheOptions<T>): Promise<MixedCache<T>> {
 		const opts = {
 			...options,
-			maxStaleAgeMs: options.maxStaleAgeMs ?? 7 * 24 * 60 * 60 * 1000, // 7 days
 			memoryCheckIntervalMs: options.memoryCheckIntervalMs ?? 5000,
 			writePolicy: options.writePolicy ?? "through",
 			flushTimeoutMs: options.flushTimeoutMs ?? 10_000,
+			splitFolders: options.splitFolders ?? [],
+			skipLoadingScanCache: options.skipCacheLoading ?? false,
 		}
 
 		// Create L2 (disk cache)
 		const l2 = await DiskCache.create<T>({
 			cacheDir: opts.cacheDir,
 			extension: opts.extension,
-			expiryMs: opts.diskExpiryMs + opts.maxStaleAgeMs, // Keep stale entries for revalidation
+			expiryMs: opts.diskExpiryMs,
 			serialize: opts.serialize,
 			deserialize: opts.deserialize,
 			verifyOnRead: opts.verifyOnRead,
+			splitFolders: opts.splitFolders,
+			skipCacheLoading: opts.skipLoadingScanCache,
 		})
 
 		// Create L1 (memory cache)
@@ -205,26 +210,11 @@ export class MixedCache<T> {
 		}
 	}
 
-	private handleShutdown(signal: string): void {
-		if (this.isShuttingDown) {
-			console.error(`MixedCache: received ${signal} again, forcing exit`)
-			process.exit(1)
-		}
-
+	private handleShutdown(signal: string): Promise<void> {
 		this.isShuttingDown = true
 		console.log(`MixedCache: received ${signal}, flushing dirty entries...`)
-
-		const forceExitTimeout = setTimeout(() => {
-			console.error(`MixedCache: flush timeout after ${this.flushTimeoutMs}ms, forcing exit`)
-			process.exit(1)
-		}, this.flushTimeoutMs)
-
-		this.flush()
-			.catch((err) => console.error("MixedCache: flush error during shutdown:", err))
-			.finally(() => {
-				clearTimeout(forceExitTimeout)
-				process.exit(0)
-			})
+		this.destroy()
+		return this.flush().catch((err) => console.error("MixedCache: flush error during shutdown:", err))
 	}
 
 	private checkMemoryPressure(): void {
@@ -285,8 +275,7 @@ export class MixedCache<T> {
 				if (this.dirty.has(key)) {
 					const data = this.l1.get(key)
 					if (data !== undefined) {
-						const dirtyEntry = this.dirty.get(key)
-						await this.l2.set(key, data, dirtyEntry?.etag).catch(() => {})
+						await this.l2.set(key, data).catch(() => {})
 					}
 					this.dirty.delete(key)
 				}
@@ -310,7 +299,9 @@ export class MixedCache<T> {
 			return l1Value
 		}
 		this.stats.l1Misses++
-
+		if (this.skipCacheLoading) {
+			return undefined
+		}
 		// Try L2
 		const l2Timestamp = this.l2.getTimestamp(key)
 		if (l2Timestamp === undefined) {
@@ -322,15 +313,8 @@ export class MixedCache<T> {
 		const age = now - l2Timestamp
 
 		// Check if beyond max stale age (should be pruned)
-		if (age >= this.diskExpiryMs + this.maxStaleAgeMs) {
-			await this.l2.delete(key)
-			this.stats.l2Misses++
-			return undefined
-		}
-
-		// Check if stale (expired but within maxStaleAgeMs)
 		if (age >= this.diskExpiryMs) {
-			// Stale - don't return data, preserve for etag revalidation
+			await this.l2.delete(key)
 			this.stats.l2Misses++
 			return undefined
 		}
@@ -352,16 +336,15 @@ export class MixedCache<T> {
 	 * Write-through: immediately writes to L2.
 	 * Write-back: marks entry dirty for later flush.
 	 */
-	async set(key: string, data: T, etag?: string): Promise<void> {
+	set(key: string, data: T): void {
 		// Set in L1
 		this.l1.set(key, data)
 
 		// Handle L2
 		if (this.writePolicy === "through") {
-			await this.l2.set(key, data, etag)
-			this.dirty.delete(key)
+			this.l2.set(key, data).catch(() => console.error(`MixedCache: failed to write key ${key} to L2`))
 		} else {
-			this.dirty.set(key, { etag })
+			this.dirty.add(key)
 		}
 
 		this.stats.serverFetches++
@@ -387,7 +370,7 @@ export class MixedCache<T> {
 		if (timestamp === undefined) return false
 
 		const age = Date.now() - timestamp
-		return age >= this.diskExpiryMs && age < this.diskExpiryMs + this.maxStaleAgeMs
+		return age >= this.diskExpiryMs && age < this.diskExpiryMs
 	}
 
 	/**
@@ -399,19 +382,15 @@ export class MixedCache<T> {
 		if (timestamp === undefined) return null
 
 		const age = Date.now() - timestamp
-		if (age < this.diskExpiryMs || age >= this.diskExpiryMs + this.maxStaleAgeMs) {
+		if (age < this.diskExpiryMs || age >= this.diskExpiryMs) {
 			return null
 		}
-
-		const etag = this.l2.getEtag(key)
-		if (!etag || etag === "no-etag") return null
 
 		// Get hash from L2 entries
 		const entries = this.l2.entries()
 		for (const [k, entry] of entries) {
 			if (k === key) {
 				return {
-					etag,
 					timestamp,
 					hash: entry.hash,
 				}
@@ -419,13 +398,6 @@ export class MixedCache<T> {
 		}
 
 		return null
-	}
-
-	/**
-	 * Get the etag for a cached entry (fresh or stale).
-	 */
-	getEtag(key: string): string | null {
-		return this.l2.getEtag(key)
 	}
 
 	/**
@@ -445,7 +417,6 @@ export class MixedCache<T> {
 		const l2Value = await this.l2.get(key)
 		if (l2Value !== undefined) {
 			this.l1.set(key, l2Value)
-			this.stats.etagHits++
 		}
 	}
 
@@ -478,31 +449,10 @@ export class MixedCache<T> {
 	 * Write-back: parallel writes (L1 only, L2 deferred).
 	 * Returns succeeded and failed keys.
 	 */
-	async setMany(
-		entries: Array<{ key: string; data: T; etag?: string }>,
-	): Promise<{ succeeded: string[]; failed: string[] }> {
-		const succeeded: string[] = []
-		const failed: string[] = []
-
-		if (this.writePolicy === "through") {
-			// Sequential for disk I/O safety
-			for (const { key, data, etag } of entries) {
-				await this.set(key, data, etag)
-					.then(() => succeeded.push(key))
-					.catch(() => failed.push(key))
-			}
-		} else {
-			// Parallel for write-back (L1 only)
-			await Promise.all(
-				entries.map(async ({ key, data, etag }) => {
-					await this.set(key, data, etag)
-						.then(() => succeeded.push(key))
-						.catch(() => failed.push(key))
-				}),
-			)
+	async setMany(entries: Array<{ key: string; data: T }>): Promise<void> {
+		for (const { key, data } of entries) {
+			this.set(key, data)
 		}
-
-		return { succeeded, failed }
 	}
 
 	/**
@@ -512,10 +462,10 @@ export class MixedCache<T> {
 		if (this.dirty.size === 0) return
 
 		// Flush sequentially for disk I/O safety
-		for (const [key, dirtyEntry] of this.dirty) {
+		for (const key of this.dirty) {
 			const data = this.l1.get(key)
 			if (data !== undefined) {
-				await this.l2.set(key, data, dirtyEntry.etag).catch(() => {})
+				await this.l2.set(key, data).catch(() => {})
 			}
 			this.dirty.delete(key)
 		}
@@ -533,7 +483,7 @@ export class MixedCache<T> {
 	 * Removes entries older than diskExpiryMs + maxStaleAgeMs.
 	 */
 	async pruneL2(): Promise<number> {
-		return this.l2.prune(this.diskExpiryMs + this.maxStaleAgeMs)
+		return this.l2.prune(this.diskExpiryMs)
 	}
 
 	/**

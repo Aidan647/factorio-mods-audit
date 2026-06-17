@@ -22,7 +22,7 @@ export interface MemoryCacheOptions<T> {
  * Minimum 10 entries.
  */
 function calcStepSize(maxSize: number | undefined): number {
-	return maxSize ? Math.max(10, Math.floor(maxSize * 0.20)) : 10
+	return maxSize ? Math.max(10, Math.floor(maxSize * 0.2)) : 10
 }
 
 /** Absolute maximum L1 size cap */

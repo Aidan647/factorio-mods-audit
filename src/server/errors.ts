@@ -13,8 +13,7 @@ export const invalidParams = (detail: string) => rpcError(ERROR_CODES.INVALID_PA
 export const internalError = (err: unknown) =>
 	rpcError(ERROR_CODES.INTERNAL_ERROR, err instanceof Error ? err.message : String(err))
 
-export const modNotFound = (modName: string) =>
-	rpcError(ERROR_CODES.MOD_NOT_FOUND, `Mod not found: ${modName}`)
+export const modNotFound = (modName: string) => rpcError(ERROR_CODES.MOD_NOT_FOUND, `Mod not found: ${modName}`)
 
 export const versionNotFound = (modName: string, version: string) =>
 	rpcError(ERROR_CODES.VERSION_NOT_FOUND, `Version ${version} not found for mod ${modName}`)

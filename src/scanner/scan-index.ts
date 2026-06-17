@@ -47,4 +47,3 @@ export class ScanIndex {
 		await fs.writeFile(this.indexPath, JSON.stringify(this.data))
 	}
 }
-

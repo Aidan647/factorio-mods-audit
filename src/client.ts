@@ -4,11 +4,7 @@ import type { ScanParams, ScanResult } from "./server/types"
  * Send a scan request over an already-connected WebSocket and await the result.
  * The caller is responsible for creating and closing the WebSocket.
  */
-export function scanMod(
-	ws: WebSocket,
-	modName: string,
-	version?: string,
-): Promise<ScanResult> {
+export function scanMod(ws: WebSocket, modName: string, version?: string): Promise<ScanResult> {
 	const params: ScanParams = { modName, ...(version !== undefined ? { version } : {}) }
 	ws.send(JSON.stringify({ jsonrpc: "2.0", method: "scan", params, id: 1 }))
 

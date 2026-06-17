@@ -70,6 +70,7 @@ export class ModPortal {
 					extension: ".zip",
 					expiryMs,
 					pruneIntervalMs: expiryMs / 48,
+					splitFolders: [2],
 				})
 			}
 			this.downloadCache = await this.downloadCachePromise
