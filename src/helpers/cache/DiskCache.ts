@@ -39,7 +39,8 @@ interface IndexEntry {
 export class DiskCache<T> {
 	private readonly index = new Map<string, IndexEntry>()
 	private pruneTimer: ReturnType<typeof setInterval> | null = null
-	private indexLoaded = false
+	private saveChain: Promise<void> | null = null
+	private saveQueued = false
 
 	private readonly cacheDir: string
 	private readonly extension: string
@@ -88,10 +89,8 @@ export class DiskCache<T> {
 
 	private async init(): Promise<void> {
 		await mkdir(this.cacheDir, { recursive: true })
-		if (this.skipCacheLoading) return
-
-		// Load the consolidated index file — one read instead of N .meta files
-		await this.loadIndex().catch(() => {})
+		// Load index eagerly — one read instead of N .meta files
+		await this.loadIndex()
 	}
 
 	private indexFilePath(): string {
@@ -103,7 +102,7 @@ export class DiskCache<T> {
 	 * On first run (no index.meta), attempts one-time migration from old per-entry .meta files.
 	 */
 	private async loadIndex(): Promise<void> {
-		if (this.indexLoaded) return
+		if (this.skipCacheLoading) return
 
 		const indexPath = this.indexFilePath()
 		const content = await Bun.file(indexPath)
@@ -115,7 +114,6 @@ export class DiskCache<T> {
 			for (const [key, entry] of Object.entries(parsed)) {
 				this.index.set(key, entry)
 			}
-			this.indexLoaded = true
 			// Clean up any leftover .meta.tmp files
 			await unlink(indexPath + ".tmp").catch(() => {})
 			return
@@ -126,7 +124,6 @@ export class DiskCache<T> {
 		const metaFiles = allFiles.filter((f) => f.endsWith(".meta") && !f.endsWith(".meta.tmp"))
 
 		if (metaFiles.length === 0) {
-			this.indexLoaded = true
 			return
 		}
 
@@ -136,13 +133,17 @@ export class DiskCache<T> {
 			const metaPath = join(this.cacheDir, f)
 			const dataPath = join(dirname(metaPath), `${key}${this.extension}`)
 
-			const dataExists = await stat(dataPath).then(() => true).catch(() => false)
+			const dataExists = await stat(dataPath)
+				.then(() => true)
+				.catch(() => false)
 			if (!dataExists) {
 				await unlink(metaPath).catch(() => {})
 				continue
 			}
 
-			const metaContent = await Bun.file(metaPath).text().catch(() => null)
+			const metaContent = await Bun.file(metaPath)
+				.text()
+				.catch(() => null)
 			if (!metaContent) {
 				await unlink(metaPath).catch(() => {})
 				continue
@@ -156,18 +157,32 @@ export class DiskCache<T> {
 
 		if (migrated > 0) {
 			console.log(`DiskCache: migrated ${migrated} entries from .meta files to index.meta`)
-			await this.saveIndex()
+			await this.writeIndex()
 		}
-
-		this.indexLoaded = true
 	}
 
 	/**
-	 * Atomically write the in-memory index to index.meta.
+	 * Queue an atomic write of the in-memory index to index.meta.
+	 * Calls are serialized via the saveChain promise to prevent races.
 	 */
-	private async saveIndex(): Promise<void> {
+	private saveIndex(): void {
+		if (!this.saveChain) {
+			// Idle → start write now
+			this.saveChain = this.writeIndex().catch((err) => {
+				console.error("DiskCache: failed to save index:", err)
+			})
+		} else if (!this.saveQueued) {
+			// Write in progress, no follow-up yet → schedule one
+			this.saveQueued = true
+		}
+	}
+
+	private async writeIndex(): Promise<void> {
 		const indexPath = this.indexFilePath()
 		const tmpPath = indexPath + ".tmp"
+
+		await Bun.sleep(50) // Artificial delay to batch multiple rapid updates
+		this.saveQueued = false // safe because the data snapshot is captured below
 
 		const obj: Record<string, IndexEntry> = {}
 		for (const [key, entry] of this.index) {
@@ -176,6 +191,12 @@ export class DiskCache<T> {
 
 		await Bun.write(tmpPath, JSON.stringify(obj))
 		await rename(tmpPath, indexPath)
+
+		this.saveChain = null
+		if (this.saveQueued) {
+			this.saveQueued = false
+			this.saveIndex() // triggers the next write
+		}
 	}
 
 	private dataPath(key: string): string {
@@ -215,7 +236,6 @@ export class DiskCache<T> {
 	 * Get a cached value by key. Returns undefined if not found, expired, or corrupted.
 	 */
 	async get(key: string): Promise<T | undefined> {
-		await this.loadIndex()
 		const entry = this.index.get(key)
 		if (!entry) return undefined
 
@@ -272,7 +292,7 @@ export class DiskCache<T> {
 			await Bun.write(dataPath, serialized)
 
 			this.index.set(key, { timestamp, hash })
-			await this.saveIndex()
+			this.saveIndex()
 		} catch {
 			await unlink(dataPath).catch(() => {})
 			this.index.delete(key)
@@ -283,7 +303,6 @@ export class DiskCache<T> {
 	 * Check if a key exists in the cache (not expired).
 	 */
 	has(key: string): boolean {
-		if (!this.indexLoaded) this.loadIndex().catch(() => {})
 		const entry = this.index.get(key)
 		if (!entry) return false
 		return Date.now() - entry.timestamp < this.expiryMs
@@ -293,7 +312,6 @@ export class DiskCache<T> {
 	 * Delete a cache entry.
 	 */
 	async delete(key: string): Promise<boolean> {
-		await this.loadIndex()
 		if (!this.index.has(key)) return false
 		await this.deleteEntry(key)
 		return true
@@ -302,14 +320,13 @@ export class DiskCache<T> {
 	private async deleteEntry(key: string): Promise<void> {
 		this.index.delete(key)
 		await unlink(this.dataPath(key)).catch(() => {})
-		await this.saveIndex()
+		this.saveIndex()
 	}
 
 	/**
 	 * Get the timestamp for a cached entry.
 	 */
 	getTimestamp(key: string): number | undefined {
-		if (!this.indexLoaded) this.loadIndex().catch(() => {})
 		return this.index.get(key)?.timestamp
 	}
 
@@ -317,12 +334,11 @@ export class DiskCache<T> {
 	 * Update timestamp without rewriting data (e.g., on 304 response).
 	 */
 	async touch(key: string): Promise<void> {
-		await this.loadIndex()
 		const entry = this.index.get(key)
 		if (!entry) return
 
 		entry.timestamp = Date.now()
-		await this.saveIndex()
+		this.saveIndex()
 	}
 
 	/**
@@ -330,7 +346,6 @@ export class DiskCache<T> {
 	 * Returns number of entries pruned.
 	 */
 	async prune(maxAgeMs?: number): Promise<number> {
-		await this.loadIndex()
 		const threshold = maxAgeMs ?? this.expiryMs
 		const now = Date.now()
 		const keysToDelete: string[] = []
@@ -349,7 +364,6 @@ export class DiskCache<T> {
 	 * Get all cache keys.
 	 */
 	keys(): IterableIterator<string> {
-		if (!this.indexLoaded) this.loadIndex().catch(() => {})
 		return this.index.keys()
 	}
 
@@ -357,7 +371,6 @@ export class DiskCache<T> {
 	 * Get all cache entries (key → metadata).
 	 */
 	entries(): IterableIterator<[string, IndexEntry]> {
-		if (!this.indexLoaded) this.loadIndex().catch(() => {})
 		return this.index.entries()
 	}
 
@@ -365,7 +378,6 @@ export class DiskCache<T> {
 	 * Get number of entries in cache.
 	 */
 	size(): number {
-		if (!this.indexLoaded) this.loadIndex().catch(() => {})
 		return this.index.size
 	}
 
