@@ -10,6 +10,7 @@
   "scripts": {
     "format-report": "bun run tools/format-report.ts",
     "scan": "bun run src/cli/scan-command.ts",
+    "scan-top": "bun run src/cli/scan-top-command.ts",
     "scan-zip": "bun run tools/scan-zip.ts",
     "serve": "bun run src/cli/server-command.ts",
     "start": "bun run src/index.ts",

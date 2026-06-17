@@ -20,7 +20,7 @@ export interface StaleMetadata {
 	hash: string
 }
 
-	export interface MixedCacheOptions<T> {
+export interface MixedCacheOptions<T> {
 	/** Directory to store cache files */
 	cacheDir: string
 	/** File extension for data files (e.g., ".png", ".json") */
