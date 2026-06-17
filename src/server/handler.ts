@@ -1,6 +1,7 @@
 import z from "zod"
 import type { ServerWebSocket } from "bun"
 import type { JsonRpcRequest, ScanParams, ScanResult, ServerMethod, TypedResponse } from "./types"
+import type { QueueLengthResult } from "./types"
 import { methodNotFound, invalidParams, internalError, modNotFound, versionNotFound } from "./errors"
 import type { ModPortal } from "../modportal"
 import type { ModListItem } from "../modportal/types"
@@ -17,8 +18,14 @@ const scanParamsSchema = z.object({
 
 class ScanQueue {
 	private chain: Promise<void> = Promise.resolve()
+	private _length = 0
+
+	get length(): number {
+		return this._length
+	}
 
 	enqueue<T>(fn: () => Promise<T>): Promise<T> {
+		this._length++
 		return new Promise<T>((resolve, reject) => {
 			this.chain = this.chain.then(async () => {
 				try {
@@ -26,6 +33,8 @@ class ScanQueue {
 				} catch (err) {
 					reject(err)
 				}
+			}).finally(() => {
+				this._length--
 			})
 		})
 	}
@@ -73,6 +82,9 @@ export class MessageHandler {
 			case "scan":
 				await this.handleScan(ws, req)
 				break
+			case "queue_length":
+				await this.handleQueueLength(ws, req)
+				break
 			default:
 				this.send(ws, { jsonrpc: "2.0", error: methodNotFound(req.method), id: req.id ?? null })
 		}
@@ -96,6 +108,7 @@ export class MessageHandler {
 		// Queue the scan — runs serially with other scans
 		const result = await this.queue.enqueue(
 			async (): Promise<{ kind: "data"; data: ScanResult } | { kind: "error"; error: Error }> => {
+				await Bun.sleep(500)
 				this.log(`starting scan: ${params.modName}@${versionLabel}`)
 				try {
 					return await this.runScan(params)
@@ -150,6 +163,14 @@ export class MessageHandler {
 		}
 
 		return { kind: "data", data: { report, modInfo: modListItem } }
+	}
+
+	private async handleQueueLength(ws: ServerWebSocket<unknown>, _req: JsonRpcRequest): Promise<void> {
+		this.send<"queue_length">(ws, {
+			jsonrpc: "2.0",
+			result: { length: this.queue.length } satisfies QueueLengthResult,
+			id: _req.id,
+		})
 	}
 
 	private send<M extends ServerMethod>(ws: ServerWebSocket<unknown>, msg: TypedResponse<M>): void {

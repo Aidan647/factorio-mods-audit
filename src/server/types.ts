@@ -48,7 +48,7 @@ export const ERROR_CODES = {
 
 // ── Method-specific types ─────────────────────────────────────────────────
 
-export type ServerMethod = "scan" | "ping"
+export type ServerMethod = "scan" | "ping" | "queue_length"
 
 export type ScanParams = {
 	modName: string
@@ -69,9 +69,16 @@ export type PingResult = {
 
 // ── Type-safe method map ─────────────────────────────────────────────────
 
+export type QueueLengthParams = void
+
+export type QueueLengthResult = {
+	length: number
+}
+
 export type MethodMap = {
 	scan: { params: ScanParams; result: ScanResult }
 	ping: { params: PingParams; result: PingResult }
+	queue_length: { params: QueueLengthParams; result: QueueLengthResult }
 }
 
 export type TypedRequest<M extends ServerMethod> = JsonRpcRequest & {
