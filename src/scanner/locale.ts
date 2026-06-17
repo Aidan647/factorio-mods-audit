@@ -227,7 +227,7 @@ export class LocaleScanner implements Scanner {
 	}
 
 	report(_modPath: string, _sorter: ReportBuilder): ScannerResult {
-		const english = Object.keys(this.locales.get("en") || {})
+		const english = this.locales.get("en") || {}
 		for (const [locale, entries] of this.locales) {
 			for (const key in entries) {
 				const existing = entries[key]
@@ -242,11 +242,14 @@ export class LocaleScanner implements Scanner {
 						paths: existing.map((e) => `${e.file}:${e.line} (${key})`),
 					})
 				}
-				if (locale !== "en" && !english.includes(key)) {
+				if (existing[0]?.value === undefined) continue
+				if (locale !== "en" && english[key]?.[0]?.value === existing[0].value) {
+					const potentialSavings = key.length + existing[0].value.length + 2
 					this.findings.push({
-						type: "missingEnglishKey",
-						description: `The locale file contains a key that is not present in the English locale.`,
-						severity: "medium",
+						type: "untranslatedValue",
+						description: `The translation is identical to the English version, which may indicate an untranslated string.`,
+						severity: "low",
+						potentialSavings,
 						paths: existing.map((e) => `${e.file}:${e.line} (${key})`),
 					})
 				}
