@@ -6,6 +6,7 @@ import { methodNotFound, invalidParams, internalError, modNotFound, versionNotFo
 import type { ModPortal } from "../modportal"
 import type { ModListItem } from "../modportal/types"
 import type { Orchestrator } from "../scanner"
+import { SCANNER_VERSION } from "../report"
 
 // ── Param schemas ───────────────────────────────────────────────────────
 
@@ -84,6 +85,9 @@ export class MessageHandler {
 				break
 			case "queue_length":
 				await this.handleQueueLength(ws, req)
+				break
+			case "scanner_version":
+				await this.handleScannerVersion(ws, req)
 				break
 			default:
 				this.send(ws, { jsonrpc: "2.0", error: methodNotFound(req.method), id: req.id ?? null })
@@ -170,6 +174,14 @@ export class MessageHandler {
 		this.send<"queue_length">(ws, {
 			jsonrpc: "2.0",
 			result: { length: this.queue.length } satisfies QueueLengthResult,
+			id: _req.id,
+		})
+	}
+
+	private async handleScannerVersion(ws: ServerWebSocket<unknown>, _req: JsonRpcRequest): Promise<void> {
+		this.send<"scanner_version">(ws, {
+			jsonrpc: "2.0",
+			result: { version: SCANNER_VERSION },
 			id: _req.id,
 		})
 	}
