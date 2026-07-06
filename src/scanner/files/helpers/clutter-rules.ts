@@ -103,9 +103,6 @@ export const DEFAULT_CLUTTER_RULES: ClutterRule[] = [
 		severity: "medium",
 		globs: [
 			"node_modules",
-			"dist",
-			"build",
-			"out",
 			"package-lock.json",
 			"yarn.lock",
 			"pnpm-lock.yaml",
@@ -183,7 +180,6 @@ export const DEFAULT_CLUTTER_RULES: ClutterRule[] = [
 			"*.tsx",
 			"*.mts",
 			"*.cts",
-			"*.d.ts",
 			"*.html",
 			"*.py",
 			"*.rb",

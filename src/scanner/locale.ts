@@ -10,7 +10,7 @@ import type { PathEntry } from "./walkDir"
 export class LocaleScanner implements Scanner {
 	readonly id = "locale"
 	readonly weight = 30
-	readonly minimumImpact: number = 60
+	readonly minimumImpact: number = 70
 	readonly findings: Finding[] = []
 	// language code (e.g. "en") => { key: string; value: string; file: string; line: number }
 	readonly locales: Map<string, Record<string, { value: string; file: string; line: number }[]>> = new Map()
