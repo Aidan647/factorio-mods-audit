@@ -7,7 +7,7 @@ import { Rules } from "./helpers/rules"
 
 export class ImagesScanner implements Scanner {
 	readonly id = "images"
-	readonly weight = 60
+	readonly weight = 75
 	readonly findings: Finding[] = []
 	readonly rawFindings: ImageFinding[] = []
 

@@ -13,7 +13,7 @@ import { Rules } from "./helpers/rules"
  */
 export class ClutterScanner implements Scanner {
 	readonly id = "clutter"
-	readonly weight = 80
+	readonly weight = 95
 	readonly findings: Finding[] = []
 
 	/** Lazy-loaded compiled rules, loaded once on first scan. */

@@ -34,7 +34,9 @@ for (const flag of flags) {
 	}
 }
 
-const overrides: Partial<ScanConfig> = {}
+const overrides: Partial<ScanConfig> = {
+	skipLoadingScanCache: true,
+}
 if (flags.includes("--no-clamav")) {
 	overrides.disableClamAv = true
 }

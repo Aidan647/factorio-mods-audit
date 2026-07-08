@@ -9,8 +9,7 @@ import type { PathEntry } from "./walkDir"
 
 export class LocaleScanner implements Scanner {
 	readonly id = "locale"
-	readonly weight = 30
-	readonly minimumImpact: number = 70
+	readonly weight = 40
 	readonly findings: Finding[] = []
 	// language code (e.g. "en") => { key: string; value: string; file: string; line: number }
 	readonly locales: Map<string, Record<string, { value: string; file: string; line: number }[]>> = new Map()
@@ -133,7 +132,7 @@ export class LocaleScanner implements Scanner {
 			this.findings.push({
 				type: "emptyLocaleFile",
 				description: "The locale file contains no translations.",
-				severity: "medium",
+				severity: "low",
 				potentialSavings: content.length,
 				paths: [filePath],
 			})
@@ -248,7 +247,7 @@ export class LocaleScanner implements Scanner {
 					this.findings.push({
 						type: "untranslatedValue",
 						description: `The translation is identical to the English version, which may indicate an untranslated string.`,
-						severity: "low",
+						severity: "medium",
 						potentialSavings,
 						paths: existing.map((e) => `${e.file}:${e.line} (${key})`),
 					})
@@ -257,14 +256,13 @@ export class LocaleScanner implements Scanner {
 		}
 		const [mergedFindings, deductions, savings] = this.groupByCategory(this.findings)
 
-		const score = 100 * (500 / (500 + deductions))
+		const score = 100 * (2000 / (2000 + deductions))
 		return {
 			id: this.id,
 			score: score,
 			weight: this.weight,
 			savings,
 			findings: mergedFindings,
-			minimumImpact: this.minimumImpact,
 		}
 	}
 
@@ -299,11 +297,11 @@ export class LocaleScanner implements Scanner {
 			if (mergedFinding.paths) {
 				const pathCount = mergedFinding.paths.length
 				if (mergedFinding.severity === "low") scoresum += 1 * pathCount
-				else if (mergedFinding.severity === "medium") scoresum += 2 * pathCount
-				else if (mergedFinding.severity === "high") scoresum += 5 * pathCount
+				else if (mergedFinding.severity === "medium") scoresum += 6 * pathCount
+				else if (mergedFinding.severity === "high") scoresum += 12 * pathCount
 			}
 		}
-		scoresum += savingssum
+		scoresum += savingssum / 10
 		return [merged, scoresum, savingssum]
 	}
 }

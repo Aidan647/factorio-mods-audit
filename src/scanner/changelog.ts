@@ -167,8 +167,7 @@ export function parseChangelog(text: string): ChangelogParseResult {
  */
 export class ChangelogScanner implements Scanner {
 	readonly id = "changelog"
-	readonly weight = 10
-	readonly minimumImpact: number = 80
+	readonly weight = 30
 	readonly findings: Finding[] = []
 
 	static loaded = true
@@ -246,7 +245,6 @@ export class ChangelogScanner implements Scanner {
 				weight: this.weight,
 				savings: 0,
 				findings: this.findings,
-				minimumImpact: this.minimumImpact,
 			}
 		}
 
@@ -265,7 +263,6 @@ export class ChangelogScanner implements Scanner {
 			weight: this.weight,
 			savings: 0,
 			findings: this.findings,
-			minimumImpact: this.minimumImpact,
 		}
 	}
 }

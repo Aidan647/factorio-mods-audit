@@ -21,7 +21,7 @@ type DublicateEntry = {
  */
 export class DuplicatesScanner implements Scanner {
 	readonly id = "duplicates"
-	readonly weight = 70
+	readonly weight = 90
 	readonly findings: Finding[] = []
 	readonly duplicateGroups: Map<string, DublicateEntry[]> = new Map()
 

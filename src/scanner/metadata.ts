@@ -132,7 +132,7 @@ async function isValidModFolder(
  */
 export class MetadataScanner implements Scanner {
 	readonly id = "metadata"
-	readonly weight = 20
+	readonly weight = 50
 	readonly findings: Finding[] = []
 	private data: InfoJson | null = null
 
