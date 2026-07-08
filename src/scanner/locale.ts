@@ -256,7 +256,7 @@ export class LocaleScanner implements Scanner {
 		}
 		const [mergedFindings, deductions, savings] = this.groupByCategory(this.findings)
 
-		const score = 100 * (2000 / (2000 + deductions))
+		const score = 100 * (500 / (500 + deductions))
 		return {
 			id: this.id,
 			score: score,
