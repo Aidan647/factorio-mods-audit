@@ -162,7 +162,7 @@ export class MetadataScanner implements Scanner {
 		}
 		const invalidDeps: string[] = []
 		for (const dep of result.data.dependencies) {
-			const regex = /^(?:(?:!|\?|\(\?\)|~) ?)?(?:[0-9a-zA-Z\-_ ]+)(?: (?:<=|>=|=|<|>) ?\d+(?:\.\d+(?:\.\d+)?)?)?$/
+			const regex = /^(?:(?:!|\?|\(\?\)|~|\+) ?)?(?:[0-9a-zA-Z\-_ ]+)(?: (?:<=|>=|=|<|>) ?\d+(?:\.\d+(?:\.\d+)?)?)?$/
 			if (!regex.test(dep)) {
 				invalidDeps.push(dep)
 			}
