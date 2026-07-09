@@ -1,9 +1,8 @@
 import path from "node:path"
 import { mkdir } from "node:fs/promises"
-import { readFile } from "node:fs/promises"
-import { JSON5 } from "bun"
 import type { Scanner, ScannerResult } from "./base"
 import type { Finding, ReportBuilder } from "../report"
+import { loadLuacheckCodes } from "./helpers/luacheck-codes"
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -55,31 +54,28 @@ export class LuacheckScanner implements Scanner {
 	readonly findings: Finding[] = []
 
 	private warnings: LuacheckWarning[] = []
-	private hasRun = false
+	private static readonly cacheDir = path.join(
+		process.env.CACHE_DIR || path.join(process.cwd(), "data/cache"),
+		"luacheck",
+	)
 
 	static loaded = false
 	static codeDescriptions: Record<string, string> = {}
 
 	static async load(): Promise<void> {
 		if (LuacheckScanner.loaded) return
-		const cfgPath = process.env.LUACHECK_CODES_PATH || path.join(process.cwd(), "data/luacheck-codes.json5")
-		const raw = await readFile(cfgPath, "utf-8").catch(() => "{}")
-		const parsed = JSON5.parse(raw) as Record<string, string>
-		LuacheckScanner.codeDescriptions = parsed
+		const makeAwait = mkdir(LuacheckScanner.cacheDir, { recursive: true }).catch(() => {})
+		LuacheckScanner.codeDescriptions = await loadLuacheckCodes()
+		await makeAwait
 		LuacheckScanner.loaded = true
 	}
 
 	async scan(modPath: string, _sorter: ReportBuilder): Promise<void> {
-		if (this.hasRun) return
-		this.hasRun = true
-
 		const luacheckPath = process.env.LUACHECK_PATH || path.join(process.cwd(), "tools/luacheck")
 		const rcPath = process.env.LUACHECKRC_PATH || path.join(process.cwd(), "tools/.luacheckrc")
-		const cacheDir = path.join(process.env.CACHE_DIR || path.join(process.cwd(), "data/cache"), "luacheck")
-		await mkdir(cacheDir, { recursive: true }).catch(() => {})
 
 		const { stdout, stderr, exitCode } =
-			await Bun.$`${luacheckPath} --config ${rcPath} --no-color --cache ${cacheDir} -- **/*.lua`
+			await Bun.$`${luacheckPath} --config ${rcPath} --no-color --cache ${LuacheckScanner.cacheDir} -- **/*.lua`
 				.cwd(modPath)
 				.quiet()
 				.nothrow()

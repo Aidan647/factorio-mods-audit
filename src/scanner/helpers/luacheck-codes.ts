@@ -1,4 +1,9 @@
-{
+import { JSON5 } from "bun"
+import { mkdir, readFile, writeFile } from "node:fs/promises"
+import path from "node:path"
+import { z } from "zod"
+
+export const DEFAULT_LUACHECK_CODES: Record<string, string> = {
 	"011": "Syntax error",
 	"021": "Invalid inline option",
 	"022": "Unpaired inline push directive",
@@ -60,4 +65,36 @@
 	"614": "Trailing whitespace in a comment",
 	"621": "Inconsistent indentation (SPACE followed by TAB)",
 	"631": "Line is too long",
+}
+
+const LuacheckCodes = z.record(z.string(), z.string())
+type LuacheckCodes = z.infer<typeof LuacheckCodes>
+
+export type CompiledLuacheckCodes = Record<string, string>
+
+export async function loadLuacheckCodes(): Promise<CompiledLuacheckCodes> {
+	const cfgPath = process.env.LUACHECK_CODES_PATH || path.join(process.cwd(), "data/luacheck-codes.json5")
+	const loaded: Record<string, string> = await readFile(cfgPath, "utf-8")
+		.catch(() => null)
+		.then(async (content) => {
+			if (content) {
+				try {
+					const parsed = JSON5.parse(content)
+					const validated = LuacheckCodes.safeParse(parsed)
+					if (validated.success) {
+						return validated.data
+					}
+					console.error(`Invalid luacheck codes format in ${cfgPath}:`, z.treeifyError(validated.error))
+				} catch (err) {
+					console.error(`Failed to parse luacheck codes from ${cfgPath}:`, err)
+				}
+				process.exit(1)
+			}
+			// save default codes to disk for user reference and editing
+			await mkdir(path.dirname(cfgPath), { recursive: true }).catch(console.error)
+			await writeFile(cfgPath, JSON5.stringify(DEFAULT_LUACHECK_CODES, null, 2) ?? "").catch(console.error)
+			return DEFAULT_LUACHECK_CODES
+		})
+
+	return loaded
 }
