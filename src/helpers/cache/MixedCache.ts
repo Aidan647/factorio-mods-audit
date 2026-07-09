@@ -363,14 +363,14 @@ export class MixedCache<T> {
 	}
 
 	/**
-	 * Check if a key exists in L2 but is stale (can be revalidated with etag).
+	 * Check if a key exists in L2 but is stale.
 	 */
 	isStale(key: string): boolean {
 		const timestamp = this.l2.getTimestamp(key)
 		if (timestamp === undefined) return false
 
 		const age = Date.now() - timestamp
-		return age >= this.diskExpiryMs && age < this.diskExpiryMs
+		return age >= this.diskExpiryMs
 	}
 
 	/**
@@ -382,7 +382,7 @@ export class MixedCache<T> {
 		if (timestamp === undefined) return null
 
 		const age = Date.now() - timestamp
-		if (age < this.diskExpiryMs || age >= this.diskExpiryMs) {
+		if (age < this.diskExpiryMs) {
 			return null
 		}
 

@@ -118,6 +118,10 @@ async function computeResizeSavings(
 		}
 	}
 
-	const buffer = await img.png(options).toBuffer()
+	const buffer = await img.resize({
+		width: maxWidth,
+		height: maxHeight,
+		fit: "inside",
+	}).png(options).toBuffer()
 	return fileSize - buffer.byteLength
 }

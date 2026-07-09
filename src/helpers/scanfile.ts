@@ -23,7 +23,9 @@ export async function scanFile(path: string): Promise<VerdictValue> {
 		return Verdict.ScanError
 	}
 }
-await mkdir("/tmp/fma-scan", { recursive: true })
+await mkdir("/tmp/fma-scan", { recursive: true }).catch((err) => {
+	console.log("Error creating temp scan directory:", err)
+})
 process.on("beforeExit", () => {
 	rm("/tmp/fma-scan", { recursive: true, force: true }).catch((err) => {
 		console.log("Error cleaning up temp scan directory:", err)
