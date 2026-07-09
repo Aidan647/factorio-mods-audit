@@ -16,6 +16,7 @@ import { ChangelogScanner } from "./changelog"
 import walkDir from "./walkDir"
 import { MixedCache } from "../helpers/cache"
 import { LocaleScanner } from "./locale"
+import { LuacheckScanner } from "./luacheck"
 
 export class Orchestrator {
 	private readonly tmpCleanup: Promise<void | string>
@@ -74,6 +75,7 @@ export class Orchestrator {
 		DuplicatesScanner,
 		ChangelogScanner,
 		LocaleScanner,
+		LuacheckScanner,
 	]
 
 	private async loadScanners(): Promise<this> {

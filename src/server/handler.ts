@@ -28,15 +28,17 @@ class ScanQueue {
 	enqueue<T>(fn: () => Promise<T>): Promise<T> {
 		this._length++
 		return new Promise<T>((resolve, reject) => {
-			this.chain = this.chain.then(async () => {
-				try {
-					resolve(await fn())
-				} catch (err) {
-					reject(err)
-				}
-			}).finally(() => {
-				this._length--
-			})
+			this.chain = this.chain
+				.then(async () => {
+					try {
+						resolve(await fn())
+					} catch (err) {
+						reject(err)
+					}
+				})
+				.finally(() => {
+					this._length--
+				})
 		})
 	}
 }
