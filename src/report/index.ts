@@ -2,7 +2,7 @@ import type { ModListItem, Release } from "../modportal/types"
 import type { ScannerResult } from "../scanner/base"
 import { calculateScore } from "./score"
 
-export const SCANNER_VERSION = 4
+export const SCANNER_VERSION = 1
 
 export type Finding = {
 	type: string
