@@ -278,7 +278,14 @@ export class Orchestrator {
 
 	async save(sorter: ReportBuilder): Promise<AuditReport> {
 		const report = sorter.saveReport()
-		this.reportCache.set(report.sha1, report)
+		if (report.errors && report.errors.length > 0) {
+			console.error(`Errors occurred while scanning ${report.modName}@${report.version}:`)
+			for (const err of report.errors) {
+				console.error(err)
+			}
+		} else {
+			this.reportCache.set(report.sha1, report)
+		}
 		return report
 	}
 
