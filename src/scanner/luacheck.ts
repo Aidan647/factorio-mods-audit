@@ -58,24 +58,37 @@ export class LuacheckScanner implements Scanner {
 		process.env.CACHE_DIR || path.join(process.cwd(), "data/cache"),
 		"luacheck",
 	)
+	private static readonly luacheckPath = path.join(
+		process.env.LUACHECK_PATH || path.join(process.cwd(), "tools/luacheck"),
+	)
+	private static readonly luacheckRcPath = path.join(
+		process.env.LUACHECKRC_PATH || path.join(process.cwd(), "tools/.luacheckrc"),
+	)
 
 	static loaded = false
 	static codeDescriptions: Record<string, string> = {}
 
 	static async load(): Promise<void> {
 		if (LuacheckScanner.loaded) return
+		if (!await Bun.file(LuacheckScanner.luacheckPath).exists())
+			return
+		// run luacheck --version to ensure it works
+		const luachekExists = Bun.spawn([LuacheckScanner.luacheckPath, "--version"])
+
 		const makeAwait = mkdir(LuacheckScanner.cacheDir, { recursive: true }).catch(() => {})
 		LuacheckScanner.codeDescriptions = await loadLuacheckCodes()
-		await makeAwait
+		const [code] = await Promise.all([luachekExists.exited, makeAwait])
+		if (code !== 0) {
+			console.error("LuacheckScanner cannot run. Please ensure luacheck is built and available.")
+			return
+		}
 		LuacheckScanner.loaded = true
 	}
 
 	async scan(modPath: string, _sorter: ReportBuilder): Promise<void> {
-		const luacheckPath = process.env.LUACHECK_PATH || path.join(process.cwd(), "tools/luacheck")
-		const rcPath = process.env.LUACHECKRC_PATH || path.join(process.cwd(), "tools/.luacheckrc")
 
 		const { stdout, stderr, exitCode } =
-			await Bun.$`${luacheckPath} --config ${rcPath} --no-color --cache ${LuacheckScanner.cacheDir} -- **/*.lua`
+			await Bun.$`${LuacheckScanner.luacheckPath} --config ${LuacheckScanner.luacheckRcPath} --no-color --cache ${LuacheckScanner.cacheDir} -- **/*.lua`
 				.cwd(modPath)
 				.quiet()
 				.nothrow()
