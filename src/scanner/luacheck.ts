@@ -78,13 +78,13 @@ export class LuacheckScanner implements Scanner {
 		const cacheDir = path.join(process.env.CACHE_DIR || path.join(process.cwd(), "data/cache"), "luacheck")
 		await mkdir(cacheDir, { recursive: true }).catch(() => {})
 
-		const { stdout, stderr, exitCode } = await Bun.$
-			`${luacheckPath} --config ${rcPath} --no-color --cache ${cacheDir} -- **/*.lua`
-			.cwd(modPath)
-			.quiet()
-			.nothrow()
-			.then((p) => ({ stdout: p.text(), stderr: p.stderr.toString(), exitCode: p.exitCode }))
-			.catch(() => ({ stdout: "", stderr: "luacheck process failed", exitCode: -1 }))
+		const { stdout, stderr, exitCode } =
+			await Bun.$`${luacheckPath} --config ${rcPath} --no-color --cache ${cacheDir} -- **/*.lua`
+				.cwd(modPath)
+				.quiet()
+				.nothrow()
+				.then((p) => ({ stdout: p.text(), stderr: p.stderr.toString(), exitCode: p.exitCode }))
+				.catch(() => ({ stdout: "", stderr: "luacheck process failed", exitCode: -1 }))
 
 		if (exitCode !== 0 && exitCode !== 1) {
 			const msg = stderr.trim() || stdout.trim() || `luacheck exited with code ${exitCode}`
@@ -106,7 +106,11 @@ export class LuacheckScanner implements Scanner {
 
 // ── Pure helpers (exported for testing) ─────────────────────────────────────
 
-export function buildReport(warnings: LuacheckWarning[], codeDescriptions: Record<string, string>, weight: number): ScannerResult {
+export function buildReport(
+	warnings: LuacheckWarning[],
+	codeDescriptions: Record<string, string>,
+	weight: number,
+): ScannerResult {
 	// Group warnings by code
 	const grouped = new Map<string, LuacheckWarning[]>()
 	for (const w of warnings) {

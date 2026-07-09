@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises"
 import path from "node:path"
 import sharp from "sharp"
+import type { Sharp, PngOptions } from "sharp"
 import type { CompiledImageRule } from "./image-rules"
 import type { FileEntry } from "#/scanner/walkDir"
 
@@ -15,7 +16,7 @@ export type ImageFinding = {
 /**
  * Load a PNG file and extract image info.
  */
-export async function loadImage(fileEntry: FileEntry): Promise<[sharp.Sharp, number] | null> {
+export async function loadImage(fileEntry: FileEntry): Promise<[Sharp, number] | null> {
 	const buffer = await fileEntry.read().catch(() => null)
 	if (!buffer) return null
 
@@ -47,7 +48,7 @@ function maxDimension(size: { width: number; height: number }, mipmaps: number =
  * For max violations, computes potential savings by resizing + recompression.
  */
 export async function checkImage(
-	image: sharp.Sharp,
+	image: Sharp,
 	size: number,
 	imagePath: string,
 	rule: CompiledImageRule,
@@ -88,19 +89,19 @@ export async function checkImage(
 	return null
 }
 
-async function computeResizeSavings(imageInfo: { img: sharp.Sharp; fileSize: number }): Promise<number>
+async function computeResizeSavings(imageInfo: { img: Sharp; fileSize: number }): Promise<number>
 async function computeResizeSavings(
-	imageInfo: { img: sharp.Sharp; fileSize: number },
+	imageInfo: { img: Sharp; fileSize: number },
 	maxWidth: number,
 	maxHeight: number,
 ): Promise<number>
 async function computeResizeSavings(
-	imageInfo: { img: sharp.Sharp; fileSize: number },
+	imageInfo: { img: Sharp; fileSize: number },
 	maxWidth?: number,
 	maxHeight?: number,
 ): Promise<number> {
 	const { img, fileSize } = imageInfo
-	const options: sharp.PngOptions = { compressionLevel: 9 }
+	const options: PngOptions = { compressionLevel: 9 }
 	const metadata = await img.metadata()
 	if (metadata.isPalette) {
 		options.palette = true
