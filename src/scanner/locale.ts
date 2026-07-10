@@ -8,7 +8,7 @@ import type { PathEntry } from "./walkDir"
 
 export class LocaleScanner implements Scanner {
 	readonly id = "locale"
-	readonly weight = 40
+	readonly weight = 30
 	readonly findings: Finding[] = []
 	// language code (e.g. "en") => { key: string; value: string; file: string; line: number }
 	readonly locales: Map<string, Record<string, { value: string; file: string; line: number }[]>> = new Map()
@@ -255,7 +255,7 @@ export class LocaleScanner implements Scanner {
 		}
 		const [mergedFindings, deductions, savings] = this.groupByCategory(this.findings)
 
-		const score = 100 * (500 / (500 + deductions))
+		const score = 100 * (1000 / (1000 + deductions))
 		return {
 			id: this.id,
 			score: score,
@@ -296,11 +296,11 @@ export class LocaleScanner implements Scanner {
 			if (mergedFinding.paths) {
 				const pathCount = mergedFinding.paths.length
 				if (mergedFinding.severity === "low") scoresum += 1 * pathCount
-				else if (mergedFinding.severity === "medium") scoresum += 6 * pathCount
-				else if (mergedFinding.severity === "high") scoresum += 12 * pathCount
+				else if (mergedFinding.severity === "medium") scoresum += 3 * pathCount
+				else if (mergedFinding.severity === "high") scoresum += 5 * pathCount
 			}
 		}
-		scoresum += savingssum / 10
+		scoresum += savingssum / 5
 		return [merged, scoresum, savingssum]
 	}
 }

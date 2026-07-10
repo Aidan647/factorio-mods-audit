@@ -2,7 +2,7 @@ import type { ModListItem, Release } from "../modportal/types"
 import type { ScannerResult } from "../scanner/base"
 import { calculateScore } from "./score"
 
-export const SCANNER_VERSION = 1
+export const SCANNER_VERSION = 2
 
 export type Finding = {
 	type: string
@@ -52,10 +52,7 @@ export class ReportBuilder {
 	readonly version: string
 	readonly sha1: string
 
-	constructor(
-		modInfo: ModListItem,
-		release?: Release,
-	) {
+	constructor(modInfo: ModListItem, release?: Release) {
 		this.modName = modInfo.name
 		this.modNameReadable = modInfo.title
 		this.version = release?.version ?? modInfo.latest_release?.version ?? "unknown"
@@ -88,7 +85,7 @@ export class ReportBuilder {
 	}
 
 	get finalScore(): number {
-		return calculateScore(this.scannerResults)
+		return calculateScore(this.scannerResults, this.totalSavings / (this.modSize || 1))
 	}
 
 	saveReport(): AuditReport {

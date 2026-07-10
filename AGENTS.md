@@ -12,16 +12,16 @@ Factorio Mods Audit — downloads Factorio mods from the portal, scans them for 
 
 ## Commands
 
-| Task | Command |
-|---|---|
-| Type check | `bun typecheck` |
-| Format | `bun format` |
-| Tests | `bun test` |
-| Scan single mod | `bun scan <mod-name> [--json\|--md\|--html\|--txt] [--no-clamav]` |
-| Scan top N mods | `bun scan-top <popular\|downloads> <count> [--json\|--md\|--html\|--txt] [--no-clamav]` |
-| WebSocket server | `bun serve [--port N] [--host H]` |
-| Format report | `bun run tools/format-report.ts` |
-| Scan from zip | `bun run tools/scan-zip.ts` |
+| Task             | Command                                                                                 |
+| ---------------- | --------------------------------------------------------------------------------------- |
+| Type check       | `bun typecheck`                                                                         |
+| Format           | `bun format`                                                                            |
+| Tests            | `bun test`                                                                              |
+| Scan single mod  | `bun scan <mod-name> [--json\|--md\|--html\|--txt] [--no-clamav]`                       |
+| Scan top N mods  | `bun scan-top <popular\|downloads> <count> [--json\|--md\|--html\|--txt] [--no-clamav]` |
+| WebSocket server | `bun serve [--port N] [--host H]`                                                       |
+| Format report    | `bun run tools/format-report.ts`                                                        |
+| Scan from zip    | `bun run tools/scan-zip.ts`                                                             |
 
 **Verification order**: `bun typecheck && bun format && bun test`.
 
@@ -50,12 +50,14 @@ src/
 ## Config
 
 Config is env-var driven (see `.env.example`). Key vars:
+
 - `FACTORIO_USERNAME` / `FACTORIO_TOKEN` — portal credentials (required)
 - `DATA_DIR` — root data directory (default `./data`)
 - `DISABLE_CLAMAV` — skip virus scanning (default `false`)
 - `DISABLE_DISK_CACHE` — skip download caching (default `false`)
 
 Rules are JSON5 files in `data/`:
+
 - `clutter-rules.json5` — file pattern rules for clutter detection
 - `image-rules.json5` — image size/dimension rules
 - `luacheck-codes.json5` — luacheck warning code descriptions

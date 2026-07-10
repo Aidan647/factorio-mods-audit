@@ -3,8 +3,8 @@ export interface ScoreItem {
 	weight: number // 0-100
 }
 
-export function calculateScore(items: ScoreItem[]): number {
-	let result = 1
+export function calculateScore(items: ScoreItem[], savings: number): number {
+	let result = 1 - savings
 
 	for (const item of items) {
 		const score = Math.min(100, Math.max(0, item.score))

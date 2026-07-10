@@ -12,7 +12,7 @@ import { Rules } from "./helpers/rules"
  */
 export class ClutterScanner implements Scanner {
 	readonly id = "clutter"
-	readonly weight = 95
+	readonly weight = 98
 	readonly findings: Finding[] = []
 
 	/** Lazy-loaded compiled rules, loaded once on first scan. */
@@ -59,7 +59,7 @@ export class ClutterScanner implements Scanner {
 			const sev = finding.severity ?? "medium"
 			savings[sev] += finding.potentialSavings ?? 0
 		}
-		const weightedSavings = savings.low * 0.75 + savings.medium * 1 + savings.high * 1.25
+		const weightedSavings = savings.low * 0.8 + savings.medium * 1 + savings.high * 1.25
 		const wasteRatio = Math.min(weightedSavings / modSize, 1)
 		const score = 100 * (1 - wasteRatio ** 0.3)
 		return { id: this.id, score, weight: this.weight, savings: totalSavings, findings: grouped }

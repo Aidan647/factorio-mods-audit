@@ -86,7 +86,7 @@ const modListItem: ModListItem = {
 }
 
 // ── Scan ────────────────────────────────────────────────────────────────────
- // biome-ignore lint/suspicious/noExplicitAny: no need for mod portal
+// biome-ignore lint/suspicious/noExplicitAny: no need for mod portal
 const portal = new ModPortal({} as any)
 const scanner = await Orchestrator.create(portal, cfg)
 

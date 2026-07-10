@@ -50,7 +50,7 @@ export function parseLuacheckOutput(stdout: string): LuacheckWarning[] {
 
 export class LuacheckScanner implements Scanner {
 	readonly id = "luacheck"
-	readonly weight = 65
+	readonly weight = 20
 	readonly findings: Finding[] = []
 
 	private warnings: LuacheckWarning[] = []
@@ -70,8 +70,7 @@ export class LuacheckScanner implements Scanner {
 
 	static async load(): Promise<void> {
 		if (LuacheckScanner.loaded) return
-		if (!await Bun.file(LuacheckScanner.luacheckPath).exists())
-			return
+		if (!(await Bun.file(LuacheckScanner.luacheckPath).exists())) return
 		// run luacheck --version to ensure it works
 		const luachekExists = Bun.spawn([LuacheckScanner.luacheckPath, "--version"])
 
@@ -86,7 +85,6 @@ export class LuacheckScanner implements Scanner {
 	}
 
 	async scan(modPath: string, _sorter: ReportBuilder): Promise<void> {
-
 		const { stdout, stderr, exitCode } =
 			await Bun.$`${LuacheckScanner.luacheckPath} --config ${LuacheckScanner.luacheckRcPath} --no-color --cache ${LuacheckScanner.cacheDir} -- **/*.lua`
 				.cwd(modPath)
@@ -120,6 +118,21 @@ export function buildReport(
 	codeDescriptions: Record<string, string>,
 	weight: number,
 ): ScannerResult {
+	// Determine severity and cost based on warning code prefix
+	// 1xx,2xx,3xx → medium (cost 5)
+	// 0xx,4xx,5xx → high (cost 7)
+	// rest → low (cost 1)
+	function getSeverityAndCost(code: string): { severity: "low" | "medium" | "high"; cost: number } {
+		const prefix = code.charAt(0)
+		if (prefix === "1" || prefix === "2" || prefix === "3") {
+			return { severity: "medium", cost: 5 }
+		}
+		if (prefix === "0" || prefix === "4" || prefix === "5") {
+			return { severity: "high", cost: 7 }
+		}
+		return { severity: "low", cost: 1 }
+	}
+
 	// Group warnings by code
 	const grouped = new Map<string, LuacheckWarning[]>()
 	for (const w of warnings) {
@@ -128,24 +141,24 @@ export function buildReport(
 		else grouped.set(w.code, [w])
 	}
 
-	// Build a finding per code group — all low severity
+	// Build a finding per code group with severity based on code prefix
 	const findings: Finding[] = []
+	let weightedCost = 0
 	for (const [code, ws] of grouped) {
+		const { severity, cost } = getSeverityAndCost(code)
 		const desc = codeDescriptions[code]
 		const description = desc ? `${code}: ${desc}` : `luacheck warning W${code}`
 		const paths = ws.map((w) => `${w.file}:${w.line}:${w.col}`)
+		weightedCost += cost * ws.length
 		findings.push({
 			type: `luacheck:${code}`,
 			description,
-			severity: "low",
+			severity,
 			paths,
 		})
 	}
 
-	// Score: 25 fixed point — 25 warnings = 50 score
-	// Formula: 100 * 25 / (25 + totalWarnings)
-	const totalWarnings = warnings.length
-	const score = totalWarnings > 0 ? 100 * (75 / (75 + totalWarnings)) : 100
+	const score = weightedCost > 0 ? 100 * (400 / (400 + weightedCost)) : 100
 
 	return {
 		id: "luacheck",

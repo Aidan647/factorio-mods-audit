@@ -24,7 +24,7 @@ export interface Scanner {
 	report(modPath: string, sorter: ReportBuilder): ScannerResult
 	/**
 	 * return true to skip scanning this directory or files inside it. Only applicable to scanners that need to skip entire directories (like clutter).
-	*/
+	 */
 	// biome-ignore lint/suspicious/noConfusingVoidType: void is required for TS
 	scanFile?(modPath: string, sorter: ReportBuilder, entry: PathEntry): Promise<boolean | void>
 }
@@ -34,4 +34,3 @@ export interface ScannerFactory {
 	loaded: boolean
 	load?(): Promise<void>
 }
-
