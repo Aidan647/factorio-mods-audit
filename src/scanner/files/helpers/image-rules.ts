@@ -1,5 +1,5 @@
 import { Glob, JSON5 } from "bun"
-import { mkdir, readFile, writeFile } from "fs/promises"
+import { mkdir, readFile, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { z } from "zod"
 

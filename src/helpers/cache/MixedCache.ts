@@ -81,7 +81,6 @@ export class MixedCache<T> {
 	private memoryCheckTimer: ReturnType<typeof setInterval> | null = null
 	private l1PruneTimer: ReturnType<typeof setInterval> | null = null
 	private l2PruneTimer: ReturnType<typeof setInterval> | null = null
-	private isShuttingDown = false
 	private signalHandlers: { signal: string; handler: () => void }[] = []
 
 	private readonly memoryExpiryMs: number
@@ -211,7 +210,6 @@ export class MixedCache<T> {
 	}
 
 	private handleShutdown(signal: string): Promise<void> {
-		this.isShuttingDown = true
 		console.log(`MixedCache: received ${signal}, flushing dirty entries...`)
 		this.destroy()
 		return this.flush().catch((err) => console.error("MixedCache: flush error during shutdown:", err))

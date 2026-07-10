@@ -21,7 +21,7 @@ export class ImagesScanner implements Scanner {
 		ImagesScanner.loaded = true
 	}
 
-	report(modPath: string, sorter: ReportBuilder): ScannerResult {
+	report(_modPath: string, sorter: ReportBuilder): ScannerResult {
 		const totalSavings = this.rawFindings.reduce((sum, f) => sum + (f.potentialSavings ?? 0), 0)
 		const modSize = sorter.modSize || 1
 		const savings = { low: 0, medium: 0, high: 0 }
@@ -42,7 +42,7 @@ export class ImagesScanner implements Scanner {
 		}
 	}
 
-	async scanFile(modPath: string, sorter: ReportBuilder, fileEntry: PathEntry): Promise<void> {
+	async scanFile(_modPath: string, _sorter: ReportBuilder, fileEntry: PathEntry): Promise<void> {
 		if (fileEntry.isDirectory) return
 		if (!fileEntry.relativePath.endsWith(".png")) return
 		const info = await loadImage(fileEntry)

@@ -55,7 +55,6 @@ export class ReportBuilder {
 	constructor(
 		modInfo: ModListItem,
 		release?: Release,
-		private readonly reportsDir: string = "./data/reports",
 	) {
 		this.modName = modInfo.name
 		this.modNameReadable = modInfo.title

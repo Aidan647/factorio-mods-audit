@@ -1,6 +1,5 @@
 import path from "node:path"
 import { Glob } from "bun"
-import { readdir, readFile } from "node:fs/promises"
 import type { Scanner, ScannerResult } from "./base"
 import type { Finding, ReportBuilder } from "../report"
 import { ClutterScanner } from "./files"
@@ -52,7 +51,7 @@ export class LocaleScanner implements Scanner {
 		LocaleScanner.loaded = ClutterScanner.loaded
 	}
 
-	async scanFile(modPath: string, sorter: ReportBuilder, fileEntry: PathEntry): Promise<void> {
+	async scanFile(_modPath: string, _sorter: ReportBuilder, fileEntry: PathEntry): Promise<void> {
 		if (fileEntry.isDirectory) return
 		if (!fileEntry.relativePath.startsWith("locale/") || !fileEntry.relativePath.endsWith(".cfg")) return
 		const locale = this.identifyLocale(fileEntry.relativePath)
@@ -69,10 +68,10 @@ export class LocaleScanner implements Scanner {
 		}
 		const localeData = this.parseLocaleFile(content, fileEntry.relativePath)
 		for (const { key, value, line } of localeData) {
+			const existing = this.locales.get(locale) ?? {}
 			if (!this.locales.has(locale)) {
-				this.locales.set(locale, {})
+				this.locales.set(locale, existing)
 			}
-			const existing = this.locales.get(locale)!
 			if (!existing[key]) {
 				existing[key] = []
 			}

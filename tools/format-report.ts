@@ -37,10 +37,11 @@ function parseArgs(): { input: string; format: Format; output: string | null; qu
 	let quiet = false
 
 	for (let i = 0; i < args.length; i++) {
-		const a = args[i]!
+		const a = args[i]
+		if (a === undefined) break
 
 		function consumeValue(flag: string): string | null {
-			if (a.startsWith(`${flag}=`)) return a.slice(flag.length + 1)
+			if (a?.startsWith(`${flag}=`)) return a.slice(flag.length + 1)
 			if (a === flag) return args[++i] ?? null
 			return null
 		}

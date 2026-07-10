@@ -9,7 +9,7 @@
  */
 import ModPortal, { type ModPortalConfig } from "../modportal"
 import Orchestrator from "../scanner"
-import { loadConfig, type ScanConfig } from "../config"
+import { loadConfig } from "../config"
 import { createServer } from "../server"
 
 const config = loadConfig()
@@ -41,7 +41,7 @@ const orchestrator = await Orchestrator.create(portal, config)
 
 const server = createServer({ port, host, portal, orchestrator })
 
-console.log(`WebSocket server listening on ws://${host ?? "0.0.0.0"}:${port}/`)
+console.log(`WebSocket server listening on ws://${host ?? "0.0.0.0"}:${server.port}/`)
 console.log("Press Ctrl+C to stop")
 
 // Prevent the process from exiting

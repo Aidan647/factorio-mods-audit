@@ -34,7 +34,7 @@ export function isValidVersion(version: string): boolean {
 	if (version === "0.0.0") return false
 	for (const part of parts) {
 		const num = Number(part)
-		if (!Number.isInteger(num) || num < 0 || num > 65535 || isNaN(num)) return false
+		if (!Number.isInteger(num) || num < 0 || num > 65535 || Number.isNaN(num)) return false
 	}
 	return true
 }
@@ -60,7 +60,8 @@ export function parseChangelog(text: string): ChangelogParseResult {
 
 	// Find first section-start line
 	while (i < lines.length) {
-		const line = lines[i]!
+		const line = lines[i]
+		if (line === undefined) break
 		if (line === DASHES99) break
 		if (line.trim() !== "") {
 			errors.push(`line ${i}: unexpected content before first version section: "${line.slice(0, 40)}"`)
@@ -77,13 +78,13 @@ export function parseChangelog(text: string): ChangelogParseResult {
 	i++ // skip the 99-dash line
 
 	// Line after section start must not be empty
-	if (i >= lines.length || lines[i]!.trim() === "") {
+	if (i >= lines.length || lines[i]?.trim() === "") {
 		errors.push("line after version section start must not be empty")
 		return { sections, errors }
 	}
 
 	// Version line
-	const versionLine = lines[i]!
+	const versionLine = lines[i] ?? ""
 	if (!versionLine.startsWith("Version: ")) {
 		errors.push(`line ${i}: expected "Version: ", got: "${versionLine.slice(0, 40)}"`)
 		return { sections, errors }
@@ -93,8 +94,8 @@ export function parseChangelog(text: string): ChangelogParseResult {
 
 	// Date line (optional)
 	let date: string | null = null
-	if (i < lines.length && (lines[i]!.startsWith("Date: ") || lines[i]! === "Date:")) {
-		date = lines[i]!.slice("Date:".length).trim()
+	if (i < lines.length && (lines[i]?.startsWith("Date: ") || lines[i] === "Date:")) {
+		date = lines[i]?.slice("Date:".length).trim() ?? null
 		i++
 	}
 
@@ -103,7 +104,8 @@ export function parseChangelog(text: string): ChangelogParseResult {
 	let currentCategory: string | null = null
 
 	while (i < lines.length) {
-		const line = lines[i]!
+		const line = lines[i]
+		if (line === undefined) break
 
 		// Next section start → stop parsing latest section
 		if (line === DASHES99) {
@@ -117,7 +119,7 @@ export function parseChangelog(text: string): ChangelogParseResult {
 		}
 
 		// Category: starts with exactly 2 spaces, ends with `:`, NOT 4-space prefixed
-		if (/^  [^ ]/.test(line) && line.endsWith(":")) {
+		if (/^ {2}[^ ]/.test(line) && line.endsWith(":")) {
 			currentCategory = line.trim().slice(0, -1)
 			categories.set(currentCategory, [])
 			i++
@@ -127,16 +129,16 @@ export function parseChangelog(text: string): ChangelogParseResult {
 		// Entry: "    - " prefix
 		if (line.startsWith("    - ") && currentCategory) {
 			const text = line.slice(6)
-			categories.get(currentCategory)!.push(text)
+			categories.get(currentCategory)?.push(text)
 			i++
 			continue
 		}
 
 		// Multiline continuation: 6 spaces
 		if (line.startsWith("      ") && currentCategory) {
-			const entries = categories.get(currentCategory)!
+			const entries = categories.get(currentCategory) ?? []
 			if (entries.length > 0) {
-				entries[entries.length - 1] = entries[entries.length - 1]! + "\n" + line.slice(6)
+				entries[entries.length - 1] = `${entries[entries.length - 1] ?? ""}\n${line.slice(6)}`
 			}
 			i++
 			continue
@@ -210,7 +212,8 @@ export class ChangelogScanner implements Scanner {
 		if (sections.length === 0) return
 
 		// Validate latest section's version matches mod version
-		const latest = sections[0]!
+		const latest = sections[0]
+		if (latest === undefined) return
 		if (!isValidVersion(latest.version)) {
 			this.findings.push({
 				type: "InvalidChangelogVersion",

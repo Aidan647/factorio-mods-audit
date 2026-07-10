@@ -1,9 +1,6 @@
-import { Glob } from "bun"
 import path from "node:path"
-import { readdir, readFile } from "node:fs/promises"
 import type { Scanner, ScannerResult } from "../base"
 import type { Finding, ReportBuilder } from "#/report"
-import { getSize } from "#/helpers/getFolder"
 import { ClutterScanner } from "./clutter"
 import type { FileEntry, PathEntry } from "../walkDir"
 
@@ -33,7 +30,7 @@ export class DuplicatesScanner implements Scanner {
 		DuplicatesScanner.loaded = ClutterScanner.loaded
 	}
 
-	report(modPath: string, sorter: ReportBuilder): ScannerResult {
+	report(_modPath: string, sorter: ReportBuilder): ScannerResult {
 		const findings: Finding[] = []
 		let totalSavings = 0
 
@@ -59,7 +56,7 @@ export class DuplicatesScanner implements Scanner {
 		return { id: this.id, score, weight: this.weight, savings: totalSavings, findings }
 	}
 
-	async scanFile(modPath: string, sorter: ReportBuilder, fileEntry: PathEntry): Promise<void> {
+	async scanFile(_modPath: string, _sorter: ReportBuilder, fileEntry: PathEntry): Promise<void> {
 		if (fileEntry.isDirectory) return
 		if (ClutterScanner.matchRules(fileEntry.relativePath, path.basename(fileEntry.relativePath))) return
 

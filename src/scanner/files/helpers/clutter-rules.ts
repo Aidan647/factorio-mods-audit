@@ -2,7 +2,6 @@ import { Glob, JSON5 } from "bun"
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import path from "node:path"
 import z from "zod"
-import { Rules } from "./rules"
 
 export const DEFAULT_CLUTTER_RULES: ClutterRule[] = [
 	{

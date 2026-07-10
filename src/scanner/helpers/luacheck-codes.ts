@@ -67,8 +67,8 @@ export const DEFAULT_LUACHECK_CODES: Record<string, string> = {
 	"631": "Line is too long",
 }
 
-const LuacheckCodes = z.record(z.string(), z.string())
-type LuacheckCodes = z.infer<typeof LuacheckCodes>
+export const LuacheckCodes = z.record(z.string(), z.string())
+export type LuacheckCodes = z.infer<typeof LuacheckCodes>
 
 export type CompiledLuacheckCodes = Record<string, string>
 

@@ -1,11 +1,8 @@
 import ModPortal, { type ModPortalConfig } from "../modportal/"
 import Orchestrator from "../scanner"
 import { loadConfig, type ScanConfig } from "../config"
-import { readFile, rm } from "fs/promises"
-import { readdir } from "node:fs/promises"
 import type { AuditReport } from "#/report"
 import { formatTxt, formatMd, formatHtml } from "#/report/formatters"
-import { bytesToHuman, numberToHuman } from "#/helpers/humanify"
 
 export async function scanSingleMod(
 	modName: string,
@@ -131,7 +128,7 @@ export async function scanTopMods(
 	}
 
 	// Summary
-	console.log("\n" + "=".repeat(60))
+	console.log(`\n${"=".repeat(60)}`)
 	console.log("  SUMMARY")
 	console.log("=".repeat(60))
 	console.log(`  Scanned ${reports.length}/${mods.length} mod(s)`)

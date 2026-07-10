@@ -29,11 +29,11 @@ export function parseLuacheckOutput(stdout: string): LuacheckWarning[] {
 	for (const line of stdout.split("\n")) {
 		const m = line.match(LUACHECK_LINE_RE)
 		if (m) {
-			const file = m[1]!
-			const lineStr = m[2]!
-			const colStr = m[3]!
-			const code = m[4]!
-			const message = m[5]!
+			const file = m[1] ?? ""
+			const lineStr = m[2] ?? "-1"
+			const colStr = m[3] ?? "-1"
+			const code = m[4] ?? "000"
+			const message = m[5] ?? ""
 			warnings.push({
 				file,
 				line: Number(lineStr),

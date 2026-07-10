@@ -60,7 +60,7 @@ export type ScanResult = {
 	modInfo: ModListItem
 }
 
-export type PingParams = void
+export type PingParams = undefined
 
 export type PingResult = {
 	pong: true
@@ -69,13 +69,13 @@ export type PingResult = {
 
 // ── Type-safe method map ─────────────────────────────────────────────────
 
-export type QueueLengthParams = void
+export type QueueLengthParams = undefined
 
 export type QueueLengthResult = {
 	length: number
 }
 
-export type ScannerVersionParams = void
+export type ScannerVersionParams = undefined
 
 export type ScannerVersionResult = {
 	version: number

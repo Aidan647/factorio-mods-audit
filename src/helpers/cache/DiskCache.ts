@@ -1,5 +1,5 @@
-import { mkdir, readdir, rename, stat, unlink } from "node:fs/promises"
-import { basename, dirname, join } from "node:path"
+import { mkdir, readdir, rename, unlink } from "node:fs/promises"
+import { basename, join } from "node:path"
 
 export interface DiskCacheMeta {
 	timestamp: number
@@ -113,7 +113,7 @@ export class DiskCache<T> {
 				this.index.set(key, entry)
 			}
 			// Clean up any leftover .meta.tmp files
-			await unlink(this.indexFilePath + ".tmp").catch(() => {})
+			await unlink(`${this.indexFilePath}.tmp`).catch(() => {})
 
 			// also scan for any files in the cache dir that aren't in the index and remove them
 			const allFiles = await readdir(this.cacheDir, { recursive: true }).catch(() => [])
@@ -161,7 +161,7 @@ export class DiskCache<T> {
 			obj[key] = entry
 		}
 
-		const tmpPath = this.indexFilePath + ".tmp"
+		const tmpPath = `${this.indexFilePath}.tmp`
 		await Bun.write(tmpPath, JSON.stringify(obj))
 		await rename(tmpPath, this.indexFilePath)
 

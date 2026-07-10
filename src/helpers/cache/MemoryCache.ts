@@ -4,7 +4,7 @@ interface CacheEntry<T> {
 	data: T
 }
 
-export interface MemoryCacheOptions<T> {
+export interface MemoryCacheOptions {
 	/** Cache expiry in milliseconds */
 	expiryMs: number
 	/** Initial maximum entries before LRU eviction. If unset, no limit. Can be changed at runtime via setMaxSize() */
@@ -42,7 +42,7 @@ export class MemoryCache<T> {
 	private readonly maxMemoryMB: number | undefined
 	private readonly stepSize: number
 
-	constructor(options: MemoryCacheOptions<T>) {
+	constructor(options: MemoryCacheOptions) {
 		this.expiryMs = options.expiryMs
 		this.maxSize = options.maxSize
 		this.maxMemoryMB = options.maxMemoryMB

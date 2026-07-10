@@ -1,4 +1,4 @@
-import { mkdir, rm, writeFile } from "fs/promises"
+import { mkdir, rm, writeFile } from "node:fs/promises"
 
 export const Verdict = {
 	Clean: "Clean",

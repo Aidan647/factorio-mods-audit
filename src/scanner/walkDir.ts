@@ -39,7 +39,7 @@ function getFolderSize(folderPath: string): Promise<number> {
 export async function* walkDir(
 	basePath: string,
 	currentPath: string = ".",
-): AsyncGenerator<PathEntry, any, boolean | void> {
+): AsyncGenerator<PathEntry, undefined, boolean | undefined> {
 	const pathToScan = path.join(basePath, currentPath)
 	const entries = await readdir(pathToScan, { withFileTypes: true }).catch(() => [])
 

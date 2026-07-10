@@ -1,4 +1,3 @@
-import { Glob } from "bun"
 import path from "node:path"
 import { readdir } from "node:fs/promises"
 import type { Scanner, ScannerResult } from "../base"
@@ -26,7 +25,7 @@ export class ClutterScanner implements Scanner {
 		ClutterScanner.loaded = true
 	}
 
-	async scan(modPath: string, sorter: ReportBuilder): Promise<void> {
+	async scan(modPath: string, _sorter: ReportBuilder): Promise<void> {
 		const parentDir = path.join(modPath, "..")
 		const modName = path.basename(modPath)
 		const entries = await readdir(parentDir, { withFileTypes: true }).catch(() => [])
@@ -45,7 +44,7 @@ export class ClutterScanner implements Scanner {
 		}
 	}
 
-	report(modPath: string, sorter: ReportBuilder): ScannerResult {
+	report(_modPath: string, sorter: ReportBuilder): ScannerResult {
 		const grouped = this.groupFindings()
 		const totalSavings = grouped.reduce((sum, f) => sum + (f.potentialSavings ?? 0), 0)
 
@@ -65,7 +64,7 @@ export class ClutterScanner implements Scanner {
 		const score = 100 * (1 - wasteRatio ** 0.3)
 		return { id: this.id, score, weight: this.weight, savings: totalSavings, findings: grouped }
 	}
-	async scanFile(modPath: string, sorter: ReportBuilder, pathEntry: PathEntry): Promise<boolean> {
+	async scanFile(_modPath: string, _sorter: ReportBuilder, pathEntry: PathEntry): Promise<boolean> {
 		const matchedRule = ClutterScanner.matchRules(pathEntry.relativePath, path.basename(pathEntry.relativePath))
 		if (matchedRule) {
 			this.findings.push({
@@ -112,12 +111,12 @@ export class ClutterScanner implements Scanner {
 
 	static matchRules(relativePath: string, name: string): CompiledClutterRule | null {
 		for (const rule of ClutterScanner.rules) {
-			if (this.matchRule(rule, relativePath, name)) return rule
+			if (ClutterScanner.matchRule(rule, relativePath, name)) return rule
 		}
 		return null
 	}
 	private static matchRule(rule: CompiledClutterRule, relativePath: string, name: string): boolean {
-		if (this.matchExeptions(rule, relativePath, name)) return false
+		if (ClutterScanner.matchExeptions(rule, relativePath, name)) return false
 		for (const matcher of rule.matchers) if (matcher.match(relativePath) || matcher.match(name)) return true
 		return false
 	}

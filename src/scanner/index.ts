@@ -1,15 +1,14 @@
 import { unzip } from "unzipit"
-import fs from "fs/promises"
+import fs from "node:fs/promises"
 import type { ModPortal } from "../modportal"
 import type { ModListItem, Release } from "../modportal/types"
 import { ReportBuilder, type AuditReport, SCANNER_VERSION } from "../report"
-import path from "path"
+import path from "node:path"
 import { scanFile, Verdict } from "../helpers/scanfile"
 import { findModFolder, MetadataScanner } from "./metadata"
 import { ClutterScanner, ImagesScanner } from "./files"
 import { getSize } from "#/helpers/getFolder"
 import type { Scanner, ScannerFactory } from "./base"
-import { ScanIndex } from "./scan-index"
 import { loadConfig, type ScanConfig } from "../config"
 import { DuplicatesScanner } from "./files/duplicates"
 import { ChangelogScanner } from "./changelog"
@@ -19,7 +18,7 @@ import { LocaleScanner } from "./locale"
 import { LuacheckScanner } from "./luacheck"
 
 export class Orchestrator {
-	private readonly tmpCleanup: Promise<void | string>
+	private readonly tmpCleanup: Promise<undefined | string>
 
 	private constructor(
 		readonly portal: ModPortal,
@@ -91,10 +90,10 @@ export class Orchestrator {
 	}
 
 	async scanModFromBuffer(mod: ModListItem, buffer: Buffer): Promise<AuditReport> {
-		if (!mod.latest_release) throw new Error("No latest release found for mod: " + mod.name)
+		if (!mod.latest_release) throw new Error(`No latest release found for mod: ${mod.name}`)
 
 		await this.loadScanners()
-		const sorter = new ReportBuilder(mod, mod.latest_release, this.cfg.reportsDir)
+		const sorter = new ReportBuilder(mod, mod.latest_release)
 
 		const modPath = await this.preflight(mod.latest_release, sorter, buffer)
 		if (!modPath) {
@@ -117,12 +116,12 @@ export class Orchestrator {
 	}
 
 	async scanMod(mod: ModListItem): Promise<AuditReport> {
-		if (!mod.latest_release) throw new Error("No latest release found for mod: " + mod.name)
+		if (!mod.latest_release) throw new Error(`No latest release found for mod: ${mod.name}`)
 		const cached = await this.reportCache.get(mod.latest_release.sha1)
 		if (cached) return cached
 
 		await this.loadScanners()
-		const sorter = new ReportBuilder(mod, mod.latest_release, this.cfg.reportsDir)
+		const sorter = new ReportBuilder(mod, mod.latest_release)
 
 		// Stage 1: Preflight — download, unpack, virus scan, find mod folder
 		const modPath = await this.preflight(mod.latest_release, sorter)

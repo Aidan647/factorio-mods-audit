@@ -1,5 +1,4 @@
-import z from "zod"
-import { ModInfo, ModList, ModListItem, Release } from "./types"
+import { ModInfo, ModList, type ModListItem, type Release } from "./types"
 import { MemoryCache, DiskCache } from "../helpers/cache"
 import { createRateLimiter } from "../helpers/ratelimiter"
 import { scanBuffer } from "../helpers/scanfile"

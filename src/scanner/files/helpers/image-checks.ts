@@ -1,5 +1,3 @@
-import { readFile } from "node:fs/promises"
-import path from "node:path"
 import sharp from "sharp"
 import type { Sharp, PngOptions } from "sharp"
 import type { CompiledImageRule } from "./image-rules"
@@ -106,7 +104,7 @@ async function computeResizeSavings(
 	if (metadata.isPalette) {
 		options.palette = true
 		options.effort = 10
-		options.colors = Math.pow(2, metadata.bitsPerSample ?? 8)
+		options.colors = 2 ** (metadata.bitsPerSample ?? 8)
 	}
 
 	if (maxWidth !== undefined && maxHeight !== undefined) {

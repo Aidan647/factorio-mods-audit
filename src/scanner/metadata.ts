@@ -9,7 +9,7 @@ const versionFormat = z.stringFormat("versionFormat", (value) => {
 	if (split.length !== 3) return false
 	for (const part of split) {
 		const num = Number(part)
-		if (isNaN(num)) return false
+		if (Number.isNaN(num)) return false
 		if (!Number.isInteger(num)) return false
 		if (num < 0) return false
 		if (num > 65535) return false
@@ -21,7 +21,7 @@ const factorioVersions = z.stringFormat("factorioVersionFormat", (value) => {
 	if (split.length !== 2) return false
 	const num1 = Number(split[0])
 	const num2 = Number(split[1])
-	if (isNaN(num1) || isNaN(num2)) return false
+	if (Number.isNaN(num1) || Number.isNaN(num2)) return false
 	if (num1 === 0) if (num2 >= 12 && num2 <= 18) return true
 	if (num1 === 1) if (num2 >= 0 && num2 <= 1) return true
 	if (num1 === 2) if (num2 >= 0 && num2 <= 1) return true
@@ -102,8 +102,9 @@ export async function findModFolder(
 		})
 		return null
 	}
-
-	return { folderPath: results[0]!, preflightFindings }
+	const folderPath = results[0]
+	if (!folderPath) return null
+	return { folderPath, preflightFindings }
 }
 
 async function isValidModFolder(
@@ -138,11 +139,11 @@ export class MetadataScanner implements Scanner {
 
 	static loaded = true
 
-	async scan(modPath: string, sorter: ReportBuilder): Promise<void> {
+	async scan(modPath: string, _sorter: ReportBuilder): Promise<void> {
 		const infoJsonPath = path.join(modPath, "info.json")
 		this.data = JSON.parse((await readFile(infoJsonPath, "utf-8").catch(() => "{}")) || "{}")
 	}
-	report(modPath: string, sorter: ReportBuilder): ScannerResult {
+	report(modPath: string, _sorter: ReportBuilder): ScannerResult {
 		if (!this.data) {
 			this.findings.push({
 				type: "MissingInfoJson",

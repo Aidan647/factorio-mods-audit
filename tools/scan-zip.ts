@@ -6,8 +6,8 @@
  *   bun run tools/scan-zip.ts <path-to-zip> [--json | --md | --html | --txt] [--no-clamav]
  */
 
-import fs from "fs/promises"
-import path from "path"
+import fs from "node:fs/promises"
+import path from "node:path"
 import crypto from "node:crypto"
 import { loadConfig, type ScanConfig } from "../src/config"
 import { formatTxt, formatMd, formatHtml } from "../src/report/formatters"
@@ -58,9 +58,7 @@ for (const [entryPath, entry] of Object.entries(entries)) {
 			modVersion = info.version
 			break
 		}
-	} catch {
-		continue
-	}
+	} catch {}
 }
 
 if (!modName) {
@@ -88,7 +86,7 @@ const modListItem: ModListItem = {
 }
 
 // ── Scan ────────────────────────────────────────────────────────────────────
-
+ // biome-ignore lint/suspicious/noExplicitAny: no need for mod portal
 const portal = new ModPortal({} as any)
 const scanner = await Orchestrator.create(portal, cfg)
 
